@@ -172,7 +172,9 @@ const ChatMain = ({ conversation, friend, user }) => {
       try {
         const status = await websocketService.getUserStatus(friend._id);
         if (status) {
-          console.log(`Initial status for ${friend.username}: ${status.status}`);
+          console.log(
+            `Initial status for ${friend.username}: ${status.status}`
+          );
           setIsOnline(status.status === "online");
           setLastSeen(status.lastActive);
         }
