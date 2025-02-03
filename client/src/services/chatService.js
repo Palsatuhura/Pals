@@ -20,6 +20,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Log request for debugging
+    console.log('Making request:', {
+      url: config.url,
+      method: config.method,
+      data: config.data,
+      headers: config.headers
+    });
     return config;
   },
   (error) => {
@@ -30,7 +37,10 @@ api.interceptors.request.use(
 
 // Add response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('Response received:', response.data);
+    return response;
+  },
   (error) => {
     console.error("Response error:", error);
     if (error.response) {
@@ -52,9 +62,14 @@ api.interceptors.response.use(
 // Chat services
 const chatService = {
   // Login with session ID
-  login: async ({ sessionId }) => {
+  login: async (data) => {
     try {
-      const response = await api.post("/auth/login", { sessionId });
+      // Format session ID if present
+      if (data.sessionId) {
+        data.sessionId = data.sessionId.toUpperCase();
+      }
+      const response = await api.post("/auth/login", data);
+      console.log('Login response:', response.data);
       if (response.data.token) {
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("userId", response.data.user._id);
