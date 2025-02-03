@@ -1,196 +1,136 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
+  TextField,
   List,
   ListItem,
-  ListItemAvatar,
   ListItemText,
+  ListItemAvatar,
   Avatar,
-  TextField,
   Typography,
-  CircularProgress
+  CircularProgress,
+  Box,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
-import chatService from '../services/chatService';
+import { Search as SearchIcon } from '@mui/icons-material';
+import { debounce } from 'lodash';
+import userService from '../services/userService';
+import { showNotification } from '../utils/notificationUtils';
 
-const SearchInput = styled(TextField)({
-  marginBottom: '20px',
-  '& .MuiInputBase-input': {
-    color: '#fff',
-  },
-  '& .MuiInputLabel-root': {
-    color: '#8596a7',
-  },
-  '& .MuiOutlinedInput-root': {
-    '& fieldset': {
-      borderColor: '#242f3d',
-    },
-    '&:hover fieldset': {
-      borderColor: '#2b5278',
-    },
-    '&.Mui-focused fieldset': {
-      borderColor: '#2b5278',
-    },
-  },
-});
-
-const StyledListItem = styled(ListItem)(({ selected }) => ({
-  cursor: 'pointer',
-  backgroundColor: selected ? '#2b5278' : 'transparent',
-  '&:hover': {
-    backgroundColor: selected ? '#2b5278' : '#1c2733',
-  },
-}));
-
-const NewConversationDialog = ({ open, onClose }) => {
+const NewConversationDialog = ({ open, onClose, onCreateConversation }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [users, setUsers] = useState([]);
-  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
 
-  useEffect(() => {
-    if (open) {
-      fetchUsers();
+  const handleSearch = debounce(async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
     }
-  }, [open]);
 
-  const fetchUsers = async () => {
     setLoading(true);
     try {
-      const response = await chatService.getUsers();
-      // Filter out the current user
-      const currentUserId = localStorage.getItem('userId');
-      setUsers(response.filter(user => user.id !== currentUserId));
-      setError(null);
-    } catch (err) {
-      setError('Failed to fetch users');
-      console.error('Error fetching users:', err);
+      const response = await userService.searchUsers(query);
+      if (response?.data) {
+        // Filter out the current user from results
+        const currentUserId = localStorage.getItem('userId');
+        const filteredResults = response.data.filter(user => user._id !== currentUserId);
+        setSearchResults(filteredResults);
+      }
+    } catch (error) {
+      console.error('Error searching users:', error);
+      showNotification('Failed to search users', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, 300);
 
   const handleUserSelect = (user) => {
-    if (selectedUsers.find(u => u.id === user.id)) {
-      setSelectedUsers(selectedUsers.filter(u => u.id !== user.id));
-    } else {
-      setSelectedUsers([...selectedUsers, user]);
-    }
+    setSelectedUser(user);
   };
 
-  const handleCreateConversation = async () => {
-    if (selectedUsers.length === 0) return;
+  const handleCreate = async () => {
+    if (!selectedUser) return;
 
     try {
-      const userIds = selectedUsers.map(user => user.id);
-      await chatService.createConversation(userIds);
+      await onCreateConversation(selectedUser._id);
       onClose();
-      setSelectedUsers([]);
       setSearchQuery('');
-    } catch (err) {
-      setError('Failed to create conversation');
-      console.error('Error creating conversation:', err);
+      setSearchResults([]);
+      setSelectedUser(null);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      showNotification('Failed to create conversation', 'error');
     }
   };
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleClose = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedUser(null);
+    onClose();
+  };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={onClose}
-      PaperProps={{
-        sx: {
-          backgroundColor: '#17212b',
-          color: '#fff',
-          minWidth: '400px',
-        }
-      }}
-    >
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>New Conversation</DialogTitle>
       <DialogContent>
-        <SearchInput
-          autoFocus
-          margin="dense"
-          label="Search users"
-          type="text"
-          fullWidth
-          variant="outlined"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-
-        {error && (
-          <Typography color="error" sx={{ mb: 2 }}>
-            {error}
-          </Typography>
-        )}
+        <Box sx={{ mb: 2 }}>
+          <TextField
+            fullWidth
+            label="Search Users"
+            variant="outlined"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              handleSearch(e.target.value);
+            }}
+            InputProps={{
+              startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+            }}
+          />
+        </Box>
 
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
             <CircularProgress />
-          </div>
-        ) : (
-          <List sx={{ maxHeight: '400px', overflow: 'auto' }}>
-            {filteredUsers.map((user) => (
-              <StyledListItem
-                key={user.id}
-                selected={selectedUsers.some(u => u.id === user.id)}
+          </Box>
+        ) : searchResults.length > 0 ? (
+          <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
+            {searchResults.map((user) => (
+              <ListItem
+                key={user._id}
+                button
+                selected={selectedUser?._id === user._id}
                 onClick={() => handleUserSelect(user)}
               >
                 <ListItemAvatar>
-                  <Avatar src={user.avatar} alt={user.name} />
+                  <Avatar>{user.username[0].toUpperCase()}</Avatar>
                 </ListItemAvatar>
                 <ListItemText
-                  primary={
-                    <Typography sx={{ color: '#fff' }}>
-                      {user.name}
-                    </Typography>
-                  }
-                  secondary={
-                    <Typography sx={{ color: '#8596a7' }}>
-                      {user.email}
-                    </Typography>
-                  }
+                  primary={user.username}
+                  secondary={user.email}
                 />
-              </StyledListItem>
+              </ListItem>
             ))}
           </List>
-        )}
+        ) : searchQuery ? (
+          <Typography color="text.secondary" align="center">
+            No users found
+          </Typography>
+        ) : null}
       </DialogContent>
-      <DialogActions sx={{ padding: '16px' }}>
-        <Button 
-          onClick={onClose}
-          sx={{ 
-            color: '#8596a7',
-            '&:hover': {
-              backgroundColor: '#1c2733',
-            }
-          }}
-        >
-          Cancel
-        </Button>
+      <DialogActions>
+        <Button onClick={handleClose}>Cancel</Button>
         <Button
-          onClick={handleCreateConversation}
-          disabled={selectedUsers.length === 0}
-          sx={{
-            backgroundColor: '#2b5278',
-            color: '#fff',
-            '&:hover': {
-              backgroundColor: '#1c2733',
-            },
-            '&.Mui-disabled': {
-              backgroundColor: '#1c2733',
-              color: '#8596a7',
-            }
-          }}
+          onClick={handleCreate}
+          disabled={!selectedUser}
+          variant="contained"
+          color="primary"
         >
           Create
         </Button>

@@ -26,131 +26,57 @@ const upload = multer({
 });
 
 // Send a message
-router.post(
-  "/:conversationId",
-  authenticateToken,
-  upload.array("attachments"),
-  async (req, res) => {
-    try {
-      const { conversationId } = req.params;
-      const { content } = req.body;
+router.post("/:conversationId", authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { content } = req.body;
+    const userId = req.user._id;
 
-      console.log('Received message request:', {
-        conversationId,
-        content,
-        files: req.files?.length || 0,
-        userId: req.user._id
-      });
+    // Verify conversation exists and user is a participant
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      participants: userId,
+    }).populate('participants');
 
-      // Verify conversation exists and user is a participant
-      const conversation = await Conversation.findOne({
-        _id: conversationId,
-        participants: req.user._id,
-      });
-
-      if (!conversation) {
-        console.log('Conversation not found or access denied:', {
-          conversationId,
-          userId: req.user._id
-        });
-        return res
-          .status(404)
-          .json({ message: "Conversation not found or access denied" });
-      }
-
-      const attachments = req.files
-        ? req.files.map((file) => ({
-            url: file.path.replace(/\\/g, '/'),
-            type: file.mimetype.startsWith("image/")
-              ? "image"
-              : file.mimetype.startsWith("audio/")
-              ? "voice"
-              : "file",
-            filename: file.originalname,
-            filesize: file.size,
-            mimeType: file.mimetype
-          }))
-        : [];
-
-      console.log('Creating message with attachments:', {
-        attachmentsCount: attachments.length,
-        attachments
-      });
-
-      const message = new Message({
-        conversation: conversationId,
-        sender: req.user._id,
-        content: content || '',
-        attachments,
-      });
-
-      console.log('Creating message:', {
-        conversation: conversationId,
-        sender: req.user._id.toString(),
-        content: content || '',
-        attachmentsCount: attachments.length
-      });
-
-      await message.save();
-
-      // Populate sender info before sending response
-      await message.populate({
-        path: "sender",
-        select: "username avatar _id"
-      });
-
-      // Convert to a plain object and ensure consistent ID format
-      const messageObj = message.toObject();
-      messageObj.sender._id = messageObj.sender._id.toString();
-
-      console.log('Message created:', {
-        id: messageObj._id,
-        sender: messageObj.sender,
-        content: messageObj.content
-      });
-
-      // Update conversation's last message
-      conversation.lastMessage = message._id;
-      await conversation.save();
-
-      // Emit socket event for real-time updates
-      const io = req.app.get("io");
-      if (io) {
-        io.to(conversationId).emit("newMessage", messageObj);
-      }
-
-      console.log('Message created successfully:', {
-        messageId: message._id,
-        conversationId: message.conversation,
-        sender: message.sender,
-        content: message.content,
-        attachments: message.attachments
-      });
-      
-      res.status(201).json(messageObj);
-    } catch (error) {
-      console.error("Message creation error:", {
-        error: error.message,
-        stack: error.stack,
-        conversationId: req.params.conversationId,
-        userId: req.user?._id,
-        body: req.body,
-        files: req.files?.map(f => ({
-          fieldname: f.fieldname,
-          originalname: f.originalname,
-          size: f.size,
-          mimetype: f.mimetype
-        }))
-      });
-      
-      res.status(500).json({ 
-        message: "Error sending message", 
-        error: error.message,
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
     }
+
+    // Create and save the new message
+    const message = new Message({
+      content,
+      sender: userId,
+      conversation: conversationId,
+    });
+
+    await message.save();
+
+    // Populate sender info
+    await message.populate({
+      path: 'sender',
+      select: 'username'
+    });
+
+    // Convert to plain object for socket emission
+    const messageObj = message.toObject();
+
+    // Get io instance
+    const io = req.app.get('io');
+    if (io) {
+      // Emit to conversation room
+      io.to(conversationId).emit('newMessage', messageObj);
+    }
+
+    // Update conversation's last message
+    conversation.lastMessage = message._id;
+    await conversation.save();
+
+    res.status(201).json({ message: messageObj });
+  } catch (error) {
+    console.error("Error sending message:", error);
+    res.status(500).json({ message: "Error sending message" });
   }
-);
+});
 
 // Update message status
 router.put("/:messageId/status", authenticateToken, async (req, res) => {
@@ -179,7 +105,7 @@ router.put("/:messageId/status", authenticateToken, async (req, res) => {
       status,
     });
 
-    res.json(message);
+    res.json({ message });
   } catch (error) {
     res
       .status(500)
@@ -218,7 +144,7 @@ router.post("/:messageId/reactions", authenticateToken, async (req, res) => {
       reactions: message.reactions,
     });
 
-    res.json(message);
+    res.json({ message });
   } catch (error) {
     res
       .status(500)
@@ -257,16 +183,16 @@ router.delete("/:messageId", authenticateToken, async (req, res) => {
   }
 });
 
-// Get messages for a conversation
+// Get all messages for a conversation
 router.get("/:conversationId", authenticateToken, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    console.log("Getting messages for conversation:", conversationId);
+    const userId = req.user._id;
 
     // Verify conversation exists and user is a participant
     const conversation = await Conversation.findOne({
       _id: conversationId,
-      participants: req.user._id,
+      participants: userId,
     });
 
     if (!conversation) {
@@ -275,18 +201,10 @@ router.get("/:conversationId", authenticateToken, async (req, res) => {
 
     // Get messages with populated sender info
     const messages = await Message.find({ conversation: conversationId })
-      .populate({
-        path: "sender",
-        select: "username avatar _id"
-      })
+      .populate('sender', 'username')
       .sort({ createdAt: 1 });
 
-    console.log(`Found ${messages.length} messages for conversation:`, conversationId);
-
-    res.json({
-      messages,
-      conversation
-    });
+    res.json({ messages });
   } catch (error) {
     console.error("Error getting messages:", error);
     res.status(500).json({ message: "Error getting messages" });
@@ -301,7 +219,7 @@ router.get("/:conversationId/messages", authenticateToken, async (req, res) => {
       .populate("sender", "username avatar")
       .sort({ createdAt: 1 });
 
-    res.json(messages);
+    res.json({ messages });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -340,7 +258,7 @@ router.post("/send", authenticateToken, async (req, res) => {
     // Process message and save it
     const message = await Message.create(messageData);
 
-    res.status(200).json(message);
+    res.status(200).json({ message });
   } catch (error) {
     console.error("Error sending message:", error);
     res.status(500).json({ message: "Failed to send message" });

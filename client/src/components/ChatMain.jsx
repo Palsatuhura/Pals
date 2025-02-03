@@ -1,23 +1,14 @@
-import React, { useState, useEffect, useRef } from "react";
-import api from "../services/api";
-import {
-  Box,
-  Typography,
-  Avatar,
-  IconButton,
-  TextField,
-  CircularProgress,
-} from "@mui/material";
-import {
-  Send as SendIcon,
-  MoreVert as MoreVertIcon,
-} from "@mui/icons-material";
-import { formatDistanceToNow } from "date-fns";
-import websocketService from "../services/websocketService";
+import React, { useState, useEffect, useRef, useContext } from "react";
+import { Box, TextField, IconButton, Typography, Paper } from "@mui/material";
+import CircularProgress from "@mui/material/CircularProgress";
+import SendIcon from "@mui/icons-material/Send";
+import { showNotification } from "../utils/notificationUtils";
 import chatService from "../services/chatService";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { SocketContext } from "../App";
+import MessageBubble from "./MessageBubble";
 import { styled } from "@mui/material/styles";
+import { format } from "date-fns";
+import { formatUsername, generateAvatarColor } from "../utils/formatUsername";
 
 const StyledChatMain = styled(Box)({
   display: "flex",
@@ -35,450 +26,262 @@ const StyledChatMain = styled(Box)({
   marginLeft: "310px",
 });
 
-const ChatHeader = styled(Box)({
+const ChatHeader = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "20px",
   borderBottom: "2px solid #1E2C3A",
   backgroundColor: "#17212B",
-});
+  justifyContent: "space-between",
+}));
 
-const ChatMessages = styled(Box)({
+const ChatMessages = styled(Box)(({ theme }) => ({
   flex: 1,
   overflowY: "auto",
-  padding: "20px",
+  padding: "20px 0",
   backgroundColor: "#0F1620",
-  "&::-webkit-scrollbar": { width: "6px" },
-  "&::-webkit-scrollbar-track": { background: "#17212B" },
-  "&::-webkit-scrollbar-thumb": { background: "#2B5278", borderRadius: "3px" },
-});
-
-const MessageBubbleContainer = styled("div", {
-  shouldForwardProp: (prop) => prop !== "isSender",
-})(({ isSender }) => ({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: isSender ? "flex-end" : "flex-start",
-  marginBottom: "16px",
+  "&::-webkit-scrollbar": {
+    width: "6px",
+    backgroundColor: "rgba(0, 0, 0, 0.1)",
+  },
+  "&::-webkit-scrollbar-track": {
+    background: "#17212B",
+    borderRadius: "3px",
+  },
+  "&::-webkit-scrollbar-thumb": {
+    background: "#2B5278",
+    borderRadius: "3px",
+    "&:hover": {
+      background: "#3A6A9A",
+    },
+  },
 }));
 
-const MessageContentContainer = styled("div", {
-  shouldForwardProp: (prop) => prop !== "isSender",
-})(({ isSender }) => ({
-  maxWidth: "70%",
-  padding: "12px 16px",
-  borderRadius: "12px",
-  backgroundColor: isSender ? "#2B5278" : "#1E2C3A",
-  color: "#fff",
-}));
-
-const ChatInputArea = styled(Box)({
+const ChatInput = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "16px 20px",
   gap: "12px",
   borderTop: "2px solid #1E2C3A",
   backgroundColor: "#17212B",
-});
+}));
 
-const StyledInput = styled(TextField)({
+const StyledTextField = styled(TextField)({
   flex: 1,
   "& .MuiOutlinedInput-root": {
     backgroundColor: "#242F3D",
     color: "#fff",
     borderRadius: "8px",
-    "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#2B5278" },
+    "&:hover .MuiOutlinedInput-notchedOutline": {
+      borderColor: "#2B5278",
+    },
     "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
       borderColor: "#2B5278",
     },
   },
-  "& .MuiOutlinedInput-notchedOutline": { borderColor: "transparent" },
-  "& .MuiInputBase-input::placeholder": { color: "#6C7883", opacity: 1 },
+  "& .MuiOutlinedInput-notchedOutline": {
+    borderColor: "transparent",
+  },
+  "& .MuiInputBase-input::placeholder": {
+    color: "#6C7883",
+    opacity: 1,
+  },
 });
 
-const stringToColor = (str) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-  }
-  return `rgb(${[hash % 256, (hash / 256) % 256, (hash / 65536) % 256]
-    .map(Math.abs)
-    .join(",")})`;
-};
-
-const formatUsername = (username) => {
-  if (!username) return "";
-  return username.charAt(0).toUpperCase() + username.slice(1).toLowerCase();
-};
-
-const ChatMain = ({ conversation, friend, user }) => {
+const ChatMain = ({ selectedConversation }) => {
   const [messages, setMessages] = useState([]);
-  const [message, setMessage] = useState("");
-  const [isOnline, setIsOnline] = useState(false);
-  const [lastSeen, setLastSeen] = useState(null);
+  const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
-  const [socket, setSocket] = useState(null);
+  const socket = useContext(SocketContext);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Socket initialization
-  useEffect(() => {
-    let mounted = true;
-
-    const initSocket = async () => {
-      try {
-        await websocketService.connect();
-        const socketInstance = await websocketService.getSocket();
-        if (mounted) {
-          setSocket(socketInstance);
-        }
-      } catch (error) {
-        console.error("Socket initialization error:", error);
-      }
-    };
-
-    initSocket();
-
-    return () => {
-      mounted = false;
-      if (socket) {
-        websocketService.disconnect();
-      }
-    };
-  }, []);
-
-  // Real-time online status updates
-  useEffect(() => {
-    if (!socket || !friend?._id) return;
-
-    const handleStatusUpdate = (data) => {
-      if (data.userId === friend._id) {
-        console.log(`Status update for ${friend.username}: ${data.status}`);
-        setIsOnline(data.status === "online");
-        if (data.status !== "online") {
-          setLastSeen(new Date());
-        }
-      }
-    };
-
-    // Listen for status changes
-    socket.on("user_status_change", handleStatusUpdate);
-
-    // Get initial status
-    const checkInitialStatus = async () => {
-      try {
-        const status = await websocketService.getUserStatus(friend._id);
-        if (status) {
-          console.log(
-            `Initial status for ${friend.username}: ${status.status}`
-          );
-          setIsOnline(status.status === "online");
-          setLastSeen(status.lastActive);
-        }
-      } catch (error) {
-        console.error("Error checking initial status:", error);
-      }
-    };
-
-    // Check status immediately and on reconnection
-    checkInitialStatus();
-    socket.on("connect", checkInitialStatus);
-
-    return () => {
-      socket.off("user_status_change", handleStatusUpdate);
-      socket.off("connect", checkInitialStatus);
-    };
-  }, [socket, friend?._id, friend?.username]);
-
-  // Load initial messages
+  // Load messages when conversation changes
   useEffect(() => {
     const loadMessages = async () => {
-      if (conversation?._id) {
-        setLoading(true);
-        try {
-          const res = await api.get(`/messages/${conversation._id}`);
-          // Ensure messages is always an array
-          setMessages(Array.isArray(res.data) ? res.data : []);
-        } catch (error) {
-          console.error("Error loading messages:", error);
-          toast.error("Failed to load messages");
-          setMessages([]); // Reset to empty array on error
-        } finally {
-          setLoading(false);
-        }
+      if (!selectedConversation?._id) {
+        setMessages([]);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await chatService.getMessages(selectedConversation._id);
+        // Ensure we have an array of messages
+        const messageArray = Array.isArray(response.data) ? response.data : 
+                           Array.isArray(response.data.messages) ? response.data.messages : [];
+        setMessages(messageArray);
+        scrollToBottom();
+      } catch (error) {
+        console.error("Error loading messages:", error);
+        showNotification("Failed to load messages", "error");
+        setMessages([]);
+      } finally {
+        setLoading(false);
       }
     };
-    loadMessages();
-  }, [conversation]);
 
-  // Real-time message handling
+    loadMessages();
+  }, [selectedConversation?._id]);
+
+  // Socket event handlers
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !selectedConversation?._id) return;
+
+    console.log(
+      "Setting up socket listeners for conversation:",
+      selectedConversation._id
+    );
+
+    // Join conversation room
+    socket.emit("joinConversation", selectedConversation._id);
 
     const handleNewMessage = (message) => {
-      setMessages((prev) =>
-        prev.map((m) => (m.tempId === message.tempId ? message : m))
-      );
-      scrollToBottom();
-    };
-
-    socket.on("receive_message", handleNewMessage);
-    return () => socket.off("receive_message", handleNewMessage);
-  }, [socket]);
-
-  // Send message handler
-  const handleSendMessage = async (e) => {
-    e?.preventDefault();
-    if (!message.trim() || !conversation?._id) return;
-
-    const tempMessage = {
-      tempId: `temp-${Date.now()}`,
-      content: message.trim(),
-      sender: user,
-      conversation: conversation._id,
-      createdAt: new Date(),
-      isOptimistic: true,
-    };
-
-    setMessages((prev) => [...prev, tempMessage]);
-    setMessage("");
-    scrollToBottom();
-
-    try {
-      await websocketService.sendMessage({
-        conversationId: conversation._id,
-        content: message.trim(),
-        tempId: tempMessage.tempId,
-      });
-
-      await chatService.saveMessage({
-        content: message.trim(),
-        conversationId: conversation._id,
-        senderId: user._id,
-      });
-    } catch (error) {
-      setMessages((prev) =>
-        prev.filter((m) => m.tempId !== tempMessage.tempId)
-      );
-      toast.error("Failed to send message");
-    }
-  };
-
-  // Conversation management
-  useEffect(() => {
-    const manageConversation = async () => {
-      if (!conversation?._id) return;
-
-      try {
-        if (socket) {
-          await websocketService.joinConversation(conversation._id);
-        }
-      } catch (error) {
-        console.error("Conversation error:", error);
+      console.log("Received new message:", message);
+      if (message.conversation === selectedConversation._id) {
+        setMessages((prev) => [...prev, message]);
+        scrollToBottom();
       }
     };
 
-    manageConversation();
+    socket.on("newMessage", handleNewMessage);
 
     return () => {
-      if (conversation?._id) {
-        websocketService.leaveConversation(conversation._id);
-      }
+      socket.emit("leaveConversation", selectedConversation._id);
+      socket.off("newMessage", handleNewMessage);
     };
-  }, [conversation?._id, socket]);
+  }, [socket, selectedConversation?._id]);
 
-  // Formatting functions
-  const formatLastSeen = (timestamp) => {
-    if (!timestamp) return "Online";
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !selectedConversation?._id) return;
 
-    const lastSeenDate = new Date(timestamp);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    const messageContent = newMessage.trim();
+    setNewMessage("");
 
-    // Determine day label
-    let dayLabel;
-    if (lastSeenDate.toDateString() === today.toDateString()) {
-      dayLabel = "today";
-    } else if (lastSeenDate.toDateString() === yesterday.toDateString()) {
-      dayLabel = "yesterday";
-    } else {
-      dayLabel = lastSeenDate
-        .toLocaleDateString("en-US", { weekday: "long" })
-        .toLowerCase();
-    } // Format time (3:03pm)
-    const timeString = lastSeenDate
-      .toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      })
-      .toLowerCase()
-      .replace(" ", ""); // Remove space between time and am/pm
-
-    return `Last seen ${dayLabel} at ${timeString}`;
-  };
-
-  const formatMessageTime = (date) => {
     try {
-      return formatDistanceToNow(new Date(date), { addSuffix: true });
-    } catch {
-      return "";
+      const response = await chatService.sendMessage(
+        selectedConversation._id,
+        messageContent
+      );
+      console.log("Message sent:", response.data);
+
+      // Message will be added through socket event
+    } catch (error) {
+      console.error("Error sending message:", error);
+      showNotification("Failed to send message", "error");
+      setNewMessage(messageContent);
     }
   };
 
-  const generateColorFromString = (str) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-    }
-    return `rgb(${[hash % 256, (hash / 256) % 256, (hash / 65536) % 256]
-      .map(Math.abs)
-      .join(",")})`;
-  };
-
-  if (!conversation || !friend) {
+  if (!selectedConversation) {
     return (
       <StyledChatMain>
-        <Box sx={styles.placeholder}>
-          <Typography variant="h6">
-            {!conversation ? "Select a conversation" : "Friend not found"}
-          </Typography>
-        </Box>
+        <Typography
+          variant="h6"
+          sx={{ p: 3, textAlign: "center", color: "#6C7883" }}
+        >
+          Select a conversation to start chatting
+        </Typography>
       </StyledChatMain>
     );
   }
 
+  const friendId = selectedConversation.participants.find(
+    (id) => id !== localStorage.getItem("userId")
+  );
+  const isOnline = socket?.onlineUsers?.hasOwnProperty(friendId);
+  const username = selectedConversation.friend?.username || "Unknown User";
+
   return (
     <StyledChatMain>
-      <ToastContainer position="top-right" autoClose={3000} theme="dark" />
       <ChatHeader>
-        <Avatar
-          sx={{
-            bgcolor: stringToColor(friend?.username || ""),
-            width: 40,
-            height: 40,
-            marginRight: 2,
-          }}
-        >
-          {friend?.username?.[0]?.toUpperCase() || "?"}
-        </Avatar>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h6" sx={{ color: "#fff" }}>
-            {formatUsername(friend?.username)}
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#ceed9f" }}>
-            {isOnline ? "Online" : `${formatLastSeen(lastSeen)}`}
-          </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              backgroundColor: generateAvatarColor(username),
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              color: "#fff",
+              fontSize: "1.25rem",
+            }}
+          >
+            {formatUsername(username)}
+          </Box>
+          <Box>
+            <Typography variant="h6">{username}</Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                color: isOnline ? "#4caf50" : "#757575",
+              }}
+            >
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: isOnline ? "#4caf50" : "#757575",
+                }}
+              />
+              <Typography variant="body2">
+                {isOnline ? "Online" : "Offline"}
+              </Typography>
+            </Box>
+          </Box>
         </Box>
-        <IconButton sx={{ color: "#6c7883" }}>
-          <MoreVertIcon />
-        </IconButton>
       </ChatHeader>
 
       <ChatMessages>
         {loading ? (
-          <Box sx={styles.loadingContainer}>
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
             <CircularProgress />
           </Box>
-        ) : !messages?.length ? (
-          <Box sx={styles.placeholder}>
-            <Typography
-              variant="h6"
-              color="primary"
-              sx={{ mb: 1, textAlign: "center" }}
-            >
-              🎉 You're now friends with {formatUsername(friend?.username)}!
-            </Typography>
-            <Typography
-              variant="body1"
-              color="#fff"
-              sx={{ textAlign: "center" }}
-            >
-              Send them a message to start your conversation.
-            </Typography>
-          </Box>
         ) : (
-          messages.map((msg) => (
+          messages.map((message) => (
             <MessageBubble
-              key={msg._id || msg.tempId}
-              msg={msg}
-              user={user}
-              formatMessageTime={formatMessageTime}
+              key={message._id}
+              message={message}
+              isOwn={message.sender._id === localStorage.getItem("userId")}
             />
           ))
         )}
         <div ref={messagesEndRef} />
       </ChatMessages>
 
-      <ChatInputArea component="form" onSubmit={handleSendMessage}>
-        <StyledInput
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={(e) =>
-            e.key === "Enter" && !e.shiftKey && handleSendMessage(e)
-          }
+      <ChatInput component="form" onSubmit={handleSendMessage}>
+        <StyledTextField
+          fullWidth
           placeholder="Type a message..."
-          multiline
-          maxRows={4}
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          variant="outlined"
+          size="small"
         />
         <IconButton
           type="submit"
-          disabled={!message.trim()}
-          sx={styles.sendButton(message)}
+          disabled={!newMessage.trim()}
+          sx={{
+            color: newMessage.trim() ? "#2B5278" : "rgba(255, 255, 255, 0.3)",
+            "&:hover": {
+              backgroundColor: "rgba(43, 82, 120, 0.1)",
+            },
+          }}
         >
           <SendIcon />
         </IconButton>
-      </ChatInputArea>
+      </ChatInput>
     </StyledChatMain>
   );
-};
-
-const MessageBubble = ({ msg, user, formatMessageTime }) => {
-  const isSender = msg.sender?._id === user?._id;
-
-  return (
-    <MessageBubbleContainer isSender={isSender}>
-      <MessageContentContainer isSender={isSender}>
-        <Typography variant="body1" sx={{ wordBreak: "break-word" }}>
-          {msg.content}
-        </Typography>
-        <Typography variant="caption" sx={styles.messageTime(isSender)}>
-          {formatMessageTime(msg.createdAt)}
-        </Typography>
-      </MessageContentContainer>
-    </MessageBubbleContainer>
-  );
-};
-
-const styles = {
-  placeholder: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%",
-    color: "#6C7883",
-  },
-  loadingContainer: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    height: "100%",
-  },
-  messageTime: (isSender) => ({
-    display: "block",
-    color: "#6c7883",
-    mt: 1,
-    textAlign: isSender ? "right" : "left",
-  }),
-  sendButton: (message) => ({
-    color: message.trim() ? "#2B5278" : "#6c7883",
-    "&:hover": { bgcolor: "rgba(43, 82, 120, 0.1)" },
-  }),
 };
 
 export default ChatMain;

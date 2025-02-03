@@ -1,58 +1,34 @@
+import React, { useState, useEffect, createContext } from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { Box } from "@mui/material";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { showNotification } from "./utils/notificationUtils";
+import { ThemeProvider } from "@mui/material/styles";
+import theme from "./theme";
+import "./App.css";
+import { CssBaseline } from "@mui/material";
+import { io } from "socket.io-client";
+
+// Page imports
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
-import Profile from "./pages/Profile";
 import Help from "./pages/Help";
-//import NavBar from './components/NavBar'
-import { ThemeProvider, createTheme } from "@mui/material/styles";
-import CssBaseline from "@mui/material/CssBaseline";
-import { Box, Snackbar, Alert } from "@mui/material";
+import Profile from "./pages/Profile";
+
+export const SocketContext = createContext();
 
 function App() {
-  const [darkMode, setDarkMode] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(
     !!localStorage.getItem("token")
   );
-  const [notification, setNotification] = useState({
-    open: false,
-    message: "",
-    severity: "success",
-  });
-
-  const theme = createTheme({
-    palette: {
-      mode: darkMode ? "dark" : "light",
-      primary: {
-        main: "#2196f3",
-      },
-      secondary: {
-        main: "#f50057",
-      },
-    },
-  });
-
-  const showNotification = ({ message, severity = "success" }) => {
-    if (typeof message !== 'string') {
-      console.error('Invalid notification message:', message);
-      message = 'An error occurred';
-    }
-    
-    setNotification({
-      open: true,
-      message,
-      severity,
-    });
-  };
-
-  const handleCloseNotification = () => {
-    setNotification((prev) => ({ ...prev, open: false }));
-  };
+  const [darkMode, setDarkMode] = useState(false);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -61,110 +37,128 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const newSocket = io('http://localhost:5000', {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+      extraHeaders: {
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Socket connected');
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        newSocket.emit('login', userId);
+      }
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.close();
+    };
+  }, []);
+
+  const handleShowNotification = ({ message, severity = "success" }) => {
+    if (!message) {
+      console.error("Invalid notification message:", message);
+      return;
+    }
+    showNotification(message, severity);
+  };
+
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <Box
-          sx={{
-            height: "100vh",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            bgcolor: "#f5f7fa",
-          }}
-        >
-          {/*{isAuthenticated && (
-            <NavBar isAuthenticated={isAuthenticated} setIsAuthenticated={setIsAuthenticated} showNotification={showNotification} />
-          )}*/}
+      <SocketContext.Provider value={socket}>
+        <CssBaseline />
+        <Router>
           <Box
             sx={{
-              flexGrow: 1,
               display: "flex",
-              overflow: "hidden",
-              "& > .MuiBox-root": {
-                mr: "788px",
-              },
-              mt: isAuthenticated ? "64px" : 0,
-              pt: isAuthenticated ? 8 : 0,
+              flexDirection: "column",
+              minHeight: "100vh",
+              bgcolor: "background.default",
+              color: "text.primary",
             }}
           >
-            <Routes>
-              <Route
-                path="/"
-                element={
-                  !isAuthenticated ? (
-                    <Login
-                      setIsAuthenticated={setIsAuthenticated}
-                      showNotification={showNotification}
-                    />
-                  ) : (
-                    <Navigate to="/chat" />
-                  )
-                }
-              />
-              <Route
-                path="/chat"
-                element={
-                  isAuthenticated ? (
-                    <Chat showNotification={showNotification} />
-                  ) : (
-                    <Navigate to="/" />
-                  )
-                }
-              />
-              <Route
-                path="/profile"
-                element={isAuthenticated ? <Profile /> : <Navigate to="/" />}
-              />
-              <Route
-                path="/help"
-                element={
-                  isAuthenticated ? (
-                    <Help showNotification={showNotification} />
-                  ) : (
-                    <Navigate to="/" />
-                  )
-                }
-              />
-            </Routes>
-          </Box>
-
-          {/* Global Notification System */}
-          <Snackbar
-            open={notification.open}
-            autoHideDuration={4000}
-            onClose={handleCloseNotification}
-            anchorOrigin={{ vertical: "top", horizontal: "center" }}
-            sx={{
-              marginTop: "24px",
-              "& .MuiPaper-root": {
-                minWidth: "300px",
-                borderRadius: "8px",
-              },
-            }}
-          >
-            <Alert
-              onClose={handleCloseNotification}
-              severity={notification.severity}
-              variant="filled"
-              elevation={6}
+            <Box
+              component="main"
               sx={{
-                width: "100%",
-                alignItems: "center",
-                "& .MuiAlert-message": {
-                  fontSize: "0.95rem",
-                },
-                "& .MuiAlert-icon": {
-                  fontSize: "1.5rem",
-                },
+                flexGrow: 1,
+                display: "flex",
+                flexDirection: "column",
+                position: "relative",
               }}
             >
-              {notification.message || ""}
-            </Alert>
-          </Snackbar>
-        </Box>
-      </Router>
+              <Routes>
+                <Route
+                  path="/"
+                  element={
+                    !isAuthenticated ? (
+                      <Login
+                        setIsAuthenticated={setIsAuthenticated}
+                        showNotification={handleShowNotification}
+                      />
+                    ) : (
+                      <Navigate to="/chat" />
+                    )
+                  }
+                />
+
+                <Route
+                  path="/chat"
+                  element={
+                    isAuthenticated ? (
+                      <Chat showNotification={handleShowNotification} />
+                    ) : (
+                      <Navigate to="/" />
+                    )
+                  }
+                />
+
+                <Route
+                  path="/profile"
+                  element={isAuthenticated ? <Profile /> : <Navigate to="/" />}
+                />
+
+                <Route
+                  path="/help"
+                  element={
+                    isAuthenticated ? (
+                      <Help showNotification={handleShowNotification} />
+                    ) : (
+                      <Navigate to="/" />
+                    )
+                  }
+                />
+              </Routes>
+            </Box>
+
+            <ToastContainer
+              position="top-right"
+              autoClose={3000}
+              hideProgressBar={false}
+              newestOnTop
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="dark"
+            />
+          </Box>
+        </Router>
+      </SocketContext.Provider>
     </ThemeProvider>
   );
 }

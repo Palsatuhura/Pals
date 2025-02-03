@@ -140,9 +140,29 @@ const formatUsername = (username) => {
 };
 
 const getFriend = (conversation, userId) => {
-  return conversation.participants.find(
-    (p) => p._id.toString() !== userId.toString()
+  if (!conversation?.participants || !userId) {
+    console.log('Missing conversation participants or userId:', { conversation, userId });
+    return null;
+  }
+
+  // First check if the conversation has a friend object from the server
+  if (conversation.friend) {
+    return conversation.friend;
+  }
+  
+  // Fallback to finding friend in participants array
+  const friend = conversation.participants.find(
+    (p) => p?._id?.toString() !== userId?.toString()
   );
+  
+  if (!friend) {
+    console.log('No friend found in conversation:', { 
+      participants: conversation.participants,
+      userId 
+    });
+  }
+  
+  return friend;
 };
 
 const ConversationItem = ({
@@ -247,7 +267,7 @@ const ConversationItem = ({
 
 const ChatSidebar = ({
   conversations,
-  currentConversation,
+  selectedConversation,
   onConversationSelect,
   onNewConversation,
   loading,
@@ -259,7 +279,51 @@ const ChatSidebar = ({
   const [addingFriend, setAddingFriend] = useState(false);
   const [error, setError] = useState("");
   const [onlineUsers, setOnlineUsers] = useState({});
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const userId = localStorage.getItem("userId");
+      const username = localStorage.getItem("username");
+      const sessionId = localStorage.getItem("sessionId");
+      
+      if (!userId) return null;
+      
+      return {
+        _id: userId,
+        username,
+        sessionId
+      };
+    } catch (error) {
+      console.error("Error loading user from localStorage:", error);
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const userId = localStorage.getItem("userId");
+        const username = localStorage.getItem("username");
+        const sessionId = localStorage.getItem("sessionId");
+        
+        if (!userId) {
+          setUser(null);
+          return;
+        }
+        
+        setUser({
+          _id: userId,
+          username,
+          sessionId
+        });
+      } catch (error) {
+        console.error("Error loading user from localStorage:", error);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   const [socket, setSocket] = useState(null);
   const [conversationsList, setConversations] = useState([]);
   const [loadingConversations, setLoading] = useState(false);
@@ -573,124 +637,118 @@ const ChatSidebar = ({
 
     return (
       <List sx={{ p: 0 }}>
-        {filteredConversations.map((conversation) => {
-          const friend = getFriend(conversation, user?._id);
-          const friendName = formatUsername(friend?.username || "Unknown User");
-          const lastMessage = conversation?.lastMessage?.content || "No messages yet";
-          const unreadCount = conversation?.unreadCount?.[user?._id] || 0;
-          const isOnline = friend?._id && onlineUsers[friend._id];
-
-          return (
-            <ListItem
-              key={conversation._id}
-              onClick={() => onConversationSelect(conversation)}
-              sx={{
-                cursor: "pointer",
-                bgcolor: currentConversation?._id === conversation._id ? "#2B5278" : "transparent",
-                "&:hover": {
-                  bgcolor: currentConversation?._id === conversation._id ? "#2B5278" : "#1E2C3A",
-                },
-                p: 2,
-              }}
-            >
-              <ListItemAvatar>
-                <Badge
-                  overlap="circular"
-                  anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                  variant="dot"
-                  sx={{
-                    "& .MuiBadge-badge": {
-                      backgroundColor: isOnline ? "#ceed9f" : "transparent",
-                      boxShadow: isOnline
-                        ? `0 0 0 2px #17212b, 0 0 0 4px #ceed9f40`
-                        : "none",
-                      width: 14,
-                      height: 14,
-                      borderRadius: "50%",
-                      transition: "all 0.2s ease-in-out",
-                      "&::after": isOnline
-                        ? {
-                            content: '""',
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "100%",
-                            height: "100%",
-                            borderRadius: "50%",
-                            animation: "ripple 1.2s infinite ease-in-out",
-                            border: "2px solid #ceed9f",
-                          }
-                        : {},
-                    },
-                    "@keyframes ripple": {
-                      "0%": {
-                        transform: "scale(.8)",
-                        opacity: 1,
-                      },
-                      "100%": {
-                        transform: "scale(2.4)",
-                        opacity: 0,
-                      },
-                    },
-                  }}
-                >
-                  <Avatar
-                    sx={{
-                      bgcolor: stringToColor(friendName),
-                      width: 48,
-                      height: 48,
-                    }}
-                  >
-                    {friendName[0]?.toUpperCase() || "?"}
-                  </Avatar>
-                </Badge>
-              </ListItemAvatar>
-              <ListItemText
-                primary={
-                  <Typography
-                    variant="subtitle1"
-                    sx={{
-                      color: "#fff",
-                      fontWeight: unreadCount > 0 ? 600 : 400,
-                    }}
-                  >
-                    {friendName}
-                  </Typography>
-                }
-                secondary={
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "#6C7883",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {lastMessage}
-                  </Typography>
-                }
-              />
-              {unreadCount > 0 && (
-                <Box
-                  sx={{
-                    bgcolor: "#2B5278",
-                    color: "#fff",
+        {filteredConversations.map((conversation) => (
+          <ListItem
+            key={conversation._id}
+            onClick={() => handleConversationClick(conversation)}
+            sx={{
+              cursor: "pointer",
+              bgcolor: selectedConversation?._id === conversation._id ? "#2B5278" : "transparent",
+              "&:hover": {
+                bgcolor: selectedConversation?._id === conversation._id ? "#2B5278" : "#1E2C3A",
+              },
+              p: 2,
+            }}
+          >
+            <ListItemAvatar>
+              <Badge
+                overlap="circular"
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                variant="dot"
+                sx={{
+                  "& .MuiBadge-badge": {
+                    backgroundColor: onlineUsers[conversation.friend?._id] ? "#ceed9f" : "transparent",
+                    boxShadow: onlineUsers[conversation.friend?._id]
+                      ? `0 0 0 2px #17212b, 0 0 0 4px #ceed9f40`
+                      : "none",
+                    width: 14,
+                    height: 14,
                     borderRadius: "50%",
-                    width: 24,
-                    height: 24,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    ml: 1,
+                    transition: "all 0.2s ease-in-out",
+                    "&::after": onlineUsers[conversation.friend?._id]
+                      ? {
+                          content: '""',
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: "50%",
+                          animation: "ripple 1.2s infinite ease-in-out",
+                          border: "2px solid #ceed9f",
+                        }
+                      : {},
+                  },
+                  "@keyframes ripple": {
+                    "0%": {
+                      transform: "scale(.8)",
+                      opacity: 1,
+                    },
+                    "100%": {
+                      transform: "scale(2.4)",
+                      opacity: 0,
+                    },
+                  },
+                }}
+              >
+                <Avatar
+                  sx={{
+                    bgcolor: stringToColor(conversation.friend?.username),
+                    width: 48,
+                    height: 48,
                   }}
                 >
-                  <Typography variant="caption">{unreadCount}</Typography>
-                </Box>
-              )}
-            </ListItem>
-          );
-        })}
+                  {conversation.friend?.username?.[0]?.toUpperCase() || "?"}
+                </Avatar>
+              </Badge>
+            </ListItemAvatar>
+            <ListItemText
+              primary={
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    color: "#fff",
+                    fontWeight: "500",
+                  }}
+                >
+                  {formatUsername(conversation.friend?.username)}
+                </Typography>
+              }
+              secondary={
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "#6C7883",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {conversation.lastMessage?.content || "No messages yet"}
+                </Typography>
+              }
+            />
+            {conversation.unreadCount?.[user?._id] > 0 && (
+              <Box
+                sx={{
+                  bgcolor: "#2B5278",
+                  color: "#fff",
+                  borderRadius: "50%",
+                  width: 24,
+                  height: 24,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  ml: 1,
+                }}
+              >
+                <Typography variant="caption">
+                  {conversation.unreadCount?.[user?._id]}
+                </Typography>
+              </Box>
+            )}
+          </ListItem>
+        ))}
       </List>
     );
   };

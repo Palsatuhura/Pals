@@ -1,11 +1,12 @@
 const jwt = require("jsonwebtoken");
 const User = require("./models/User");
+const Message = require("./models/Message");
+const Conversation = require("./models/Conversation");
 
 const setupSocket = (io) => {
-  //Track active connections per user
-  const connectedUsers = new Map();
+  const onlineUsers = {};
+  const userSockets = {};
 
-  //Authentication middleware
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token || socket.handshake.query.token;
@@ -26,80 +27,121 @@ const setupSocket = (io) => {
     }
   });
 
-  io.on("connection", async (socket) => {
-    try {
-      //update connection count
-      const currentCount = connectedUsers.get(socket.userId) || 0;
-      connectedUsers.set(socket.userId, currentCount + 1);
+  io.on('connection', (socket) => {
+    console.log('New client connected');
 
-      //First connection - set online
-      if (currentCount === 0) {
-        await User.findByIdAndUpdate(socket.userId, {
-          online: true,
-          lastActive: null,
-          isOnline: true,
+    socket.on('login', (userId) => {
+      console.log('User logged in:', userId);
+      onlineUsers[userId] = true;
+      userSockets[userId] = socket.id;
+      
+      // Join user's room
+      socket.join(userId);
+      io.emit('userOnline', userId);
+    });
+
+    socket.on('joinConversation', (conversationId) => {
+      console.log(`User ${socket.userId} joining conversation:`, conversationId);
+      socket.join(conversationId);
+    });
+
+    socket.on('leaveConversation', (conversationId) => {
+      console.log(`User ${socket.userId} leaving conversation:`, conversationId);
+      socket.leave(conversationId);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.userId);
+      if (socket.userId) {
+        delete onlineUsers[socket.userId];
+        delete userSockets[socket.userId];
+        io.emit('userOffline', socket.userId);
+      }
+    });
+
+    socket.on('getOnlineUsers', () => {
+      socket.emit('onlineUsers', Object.keys(onlineUsers));
+    });
+
+    // Handle new message
+    socket.on("send_message", async (data) => {
+      try {
+        const { conversationId, content, replyTo } = data;
+        
+        // Create and save the message
+        const message = new Message({
+          conversation: conversationId,
+          sender: socket.userId,
+          content,
+          replyTo,
+          readBy: [socket.userId]
+        });
+        await message.save();
+
+        // Update conversation's last message
+        await Conversation.findByIdAndUpdate(conversationId, {
+          lastMessage: message._id,
+          $inc: { messageCount: 1 }
         });
 
-        io.emit("user_status_change", {
-          userId: socket.userId,
-          username: socket.username,
-          status: "online",
-          lastActive: null,
-          isOnline: true,
+        // Populate message with sender details
+        const populatedMessage = await Message.findById(message._id)
+          .populate("sender", "username")
+          .populate("replyTo");
+
+        // Emit to all users in the conversation
+        io.to(conversationId).emit("new_message", {
+          message: populatedMessage,
+          conversationId
+        });
+
+      } catch (error) {
+        console.error("Error sending message:", error);
+        socket.emit("message_error", {
+          error: "Failed to send message"
         });
       }
+    });
 
-      //Get user status handler
-      socket.on("get_user_status", async (userId) => {
-        const user = await User.findById(userId);
-        if (user) {
-          socket.emit("user_status", {
-            userId: user._id,
-            status: connectedUsers.has(user._id.toString())
-              ? "online"
-              : "offline",
-            lastActive: user.lastActive,
-            isOnline: user.isOnline,
-          });
-        }
+    // Handle typing status
+    socket.on("typing", ({ conversationId, isTyping }) => {
+      socket.to(conversationId).emit("user_typing", {
+        userId: socket.userId,
+        username: socket.username,
+        isTyping
       });
+    });
 
-      //Disconnection handler
-      socket.on("disconnect", async () => {
-        try {
-          const currentCount = connectedUsers.get(socket.userId) || 0;
-          const newCount = Math.max(currentCount - 1, 0);
+    // Handle message read status
+    socket.on("mark_read", async ({ conversationId, messageId }) => {
+      try {
+        await Message.findByIdAndUpdate(messageId, {
+          $addToSet: { readBy: socket.userId }
+        });
 
-          connectedUsers.set(socket.userId, newCount);
+        socket.to(conversationId).emit("message_read", {
+          messageId,
+          userId: socket.userId
+        });
+      } catch (error) {
+        console.error("Error marking message as read:", error);
+      }
+    });
 
-          if (newCount === 0) {
-            const updatedUser = await User.findByIdAndUpdate(
-              socket.userId,
-              {
-                $set: {
-                  online: false,
-                  lastActive: Date.now(),
-                  isOnline: false,
-                },
-              },
-              { new: true }
-            ).lean();
+    //Get user status handler
+    socket.on("get_user_status", async (userId) => {
+      const user = await User.findById(userId);
+      if (user) {
+        socket.emit("user_status", {
+          userId: user._id,
+          status: onlineUsers[user._id] ? "online" : "offline",
+          lastActive: user.lastActive,
+          isOnline: user.isOnline,
+        });
+      }
+    });
 
-            io.emit("user_status_change", {
-              userId: socket.userId,
-              status: "offline",
-              lastActice: updatedUser.lastActive,
-              isOnline: false,
-            });
-          }
-        } catch (err) {
-          "Disconnect error: ", error;
-        }
-      });
-    } catch (error) {
-      console.error("Connection error:", error);
-    }
-
+    // Handle sending message
     socket.on("send message", async ({ conversationId, content }) => {
       try {
         // save to database
@@ -110,7 +152,7 @@ const setupSocket = (io) => {
         });
 
         // send acknowledgement
-        ack({ ststus: "success", tempId });
+        // ack({ ststus: "success", tempId });
 
         // populate sender info
         const populatedMessage = await Message.findById(newMessage._id)
@@ -121,10 +163,14 @@ const setupSocket = (io) => {
       } catch (err) {
         console.error("Error sending message:", err);
         socket.emit("message_error", { error: "Failed to send message" });
-        ack({ status: "error", tempId });
+        // ack({ status: "error", tempId });
       }
     });
   });
+
+  // Attach to io instance for access in routes
+  io.onlineUsers = onlineUsers;
+  io.userSockets = userSockets;
 
   return io;
 };

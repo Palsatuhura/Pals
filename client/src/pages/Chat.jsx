@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Box, Typography, CircularProgress } from "@mui/material";
 import ChatSidebar from "../components/ChatSidebar";
 import ChatMain from "../components/ChatMain";
-import websocketService from "../services/websocketService";
 import chatService from "../services/chatService";
-import toast from "react-hot-toast";
+import { showNotification } from "../utils/notificationUtils";
+import { io } from "socket.io-client";
 
 const Chat = () => {
   const navigate = useNavigate();
@@ -17,7 +17,33 @@ const Chat = () => {
   const [error, setError] = useState(null);
   const [socket, setSocket] = useState(null);
 
-  // Auth check and socket initialization
+  // Initialize socket connection
+  useEffect(() => {
+    const newSocket = io("http://localhost:5000", {
+      auth: {
+        token: localStorage.getItem("token")
+      }
+    });
+
+    newSocket.on("connect", () => {
+      console.log("Socket connected");
+      const userId = localStorage.getItem("userId");
+      newSocket.emit("login", userId);
+    });
+
+    newSocket.on("connect_error", (error) => {
+      console.error("Socket connection error:", error);
+      showNotification("Connection error", "error");
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.close();
+    };
+  }, []);
+
+  // Auth check
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
@@ -27,22 +53,8 @@ const Chat = () => {
       }
 
       try {
-        // Initialize socket connection
-        await websocketService.connect();
-        const socket = await websocketService.getSocket();
-        if (socket) {
-          setSocket(socket);
-
-          // Join user's room for direct notifications
-          const user = JSON.parse(localStorage.getItem("user"));
-          setUser(user);
-          if (user?._id) {
-            socket.emit("joinUserRoom", { userId: user._id });
-          }
-        }
-
-        // Fetch conversations
-        await fetchConversations();
+        const user = JSON.parse(localStorage.getItem("user"));
+        setUser(user);
       } catch (error) {
         console.error("Auth check error:", error);
         navigate("/");
@@ -50,49 +62,86 @@ const Chat = () => {
     };
 
     checkAuth();
-
-    return () => {
-      websocketService.disconnect();
-    };
   }, [navigate]);
 
-  const fetchConversations = async () => {
-    try {
-      const response = await chatService.getConversations();
-      console.log("Loaded conversations:", response.data.conversations);
+  // Load conversations
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const response = await chatService.getConversations();
+        console.log("Loaded conversations:", response.data.conversations);
 
-      if (response?.data?.conversations) {
-        // Add friend info to each conversation
-        const conversationsWithFriends = response.data.conversations.map((conv) => {
-          const friend = conv?.participants?.find?.((p) => p?._id !== user?._id);
-          return {
-            ...conv,
-            friend: friend || null,
-          };
-        });
-        setConversationsList(conversationsWithFriends);
+        if (response?.data?.conversations) {
+          // Add friend info to each conversation
+          const conversationsWithFriends = response.data.conversations.map((conv) => {
+            const friend = conv?.participants?.find?.((p) => p?._id !== user?._id);
+            return {
+              ...conv,
+              friend: friend || null,
+            };
+          });
+          setConversationsList(conversationsWithFriends);
 
-        // Get unique user IDs from all conversations
-        const userIds = new Set();
-        response.data.conversations.forEach((conv) => {
-          conv.participants.forEach((p) => userIds.add(p._id));
-        });
+          // Get unique user IDs from all conversations
+          const userIds = new Set();
+          response.data.conversations.forEach((conv) => {
+            conv.participants.forEach((p) => userIds.add(p._id));
+          });
 
-        // Fetch user statuses
-        if (userIds.size > 0) {
-          const statuses = await chatService.getUserStatuses([...userIds]);
-          setUserStatuses(statuses);
+          // Fetch user statuses
+          if (userIds.size > 0) {
+            const statuses = await chatService.getUserStatuses([...userIds]);
+            setUserStatuses(statuses);
+          }
         }
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading conversations:", error);
+        showNotification("Failed to load conversations", "error");
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching conversations:", error);
-      toast.error("Failed to load conversations. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  // Socket event listeners
+    loadConversations();
+  }, [user]);
+
+  // Join conversation rooms when list is loaded
+  useEffect(() => {
+    if (!socket || !conversationsList.length) return;
+
+    // Join all conversation rooms
+    conversationsList.forEach(conversation => {
+      socket.emit("joinConversation", conversation._id);
+    });
+
+    return () => {
+      conversationsList.forEach(conversation => {
+        socket.emit("leaveConversation", conversation._id);
+      });
+    };
+  }, [socket, conversationsList]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOnline = (userId) => {
+      setUserStatuses(prev => ({ ...prev, [userId]: true }));
+    };
+
+    const handleOffline = (userId) => {
+      setUserStatuses(prev => ({ ...prev, [userId]: false }));
+    };
+
+    socket.on('userOnline', handleOnline);
+    socket.on('userOffline', handleOffline);
+    socket.emit('getOnlineUsers');
+
+    return () => {
+      socket.off('userOnline', handleOnline);
+      socket.off('userOffline', handleOffline);
+    };
+  }, [socket]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -178,23 +227,6 @@ const Chat = () => {
     };
   }, [socket, currentConversation]);
 
-  useEffect(() => {
-    const socket = websocketService.socket;
-    if (socket) {
-      // Join all conversation rooms
-      conversationsList.forEach((conv) => {
-        socket.emit("joinConversation", { conversationId: conv._id });
-      });
-    }
-
-    return () => {
-      // Leave all conversation rooms
-      conversationsList.forEach((conv) => {
-        socket.emit("leaveConversation", { conversationId: conv._id });
-      });
-    };
-  }, [conversationsList]);
-
   const handleMessageSent = async (message) => {
     if (!currentConversation?._id) {
       console.error("No active conversation");
@@ -203,7 +235,7 @@ const Chat = () => {
 
     try {
       // Send message through WebSocket
-      websocketService.sendMessage(currentConversation._id, message);
+      socket.emit("sendMessage", currentConversation._id, message);
 
       // Optimistically update UI
       const newMessage = {
@@ -236,50 +268,13 @@ const Chat = () => {
       }));
     } catch (error) {
       console.error("Error sending message:", error);
-      toast.error("Failed to send message");
+      showNotification("Failed to send message", "error");
     }
   };
 
-  const handleConversationSelect = async (conversation) => {
-    try {
-      console.log("Selected conversation:", conversation);
-      // Mark conversation as read
-      if (conversation.unreadCount > 0) {
-        await chatService.markConversationAsRead(conversation._id);
-        setConversationsList((prevConvs) =>
-          prevConvs.map((conv) =>
-            conv._id === conversation._id ? { ...conv, unreadCount: 0 } : conv
-          )
-        );
-      }
-
-      setCurrentConversation(conversation);
-    } catch (error) {
-      console.error("Error selecting conversation:", error);
-    }
-  };
-
-  const handleNewConversation = async (newConversation) => {
-    try {
-      // Notify other participant using websocketService
-      await websocketService.emit("newConversation", { conversation: newConversation });
-
-      setConversationsList((prev) => {
-        const updated = [...prev, newConversation];
-        return updated.sort((a, b) => {
-          const timeA = a.lastMessage
-            ? new Date(a.lastMessage.createdAt)
-            : new Date(0);
-          const timeB = b.lastMessage
-            ? new Date(b.lastMessage.createdAt)
-            : new Date(0);
-          return timeB - timeA;
-        });
-      });
-      setCurrentConversation(newConversation);
-    } catch (error) {
-      console.error("Error handling new conversation:", error);
-    }
+  const handleConversationSelect = (conversation) => {
+    console.log("Selected conversation:", conversation);
+    setCurrentConversation(conversation);
   };
 
   if (loading) {
@@ -318,44 +313,20 @@ const Chat = () => {
   }
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        height: "100vh",
-        backgroundColor: "#0f1620",
-      }}
-    >
-      <ChatSidebar
-        conversations={conversationsList}
-        currentConversation={currentConversation}
-        onConversationSelect={handleConversationSelect}
-        onNewConversation={handleNewConversation}
-        userStatuses={userStatuses}
-        loading={loading}
-      />
-      <Box sx={{ flex: 1, display: "flex" }}>
-        {currentConversation ? (
-          <ChatMain
-            conversation={currentConversation}
-            friend={currentConversation?.friend || null}
-            user={user}
-          />
-        ) : (
-          <Box
-            sx={{
-              flex: 1,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "#17212B",
-              width: "69rem",
-            }}
-          >
-            <Typography variant="h6" sx={{ color: "#fff" }}>
-              Select a conversation
-            </Typography>
-          </Box>
-        )}
+    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        <ChatSidebar
+          conversations={conversationsList}
+          selectedConversation={currentConversation}
+          onConversationSelect={handleConversationSelect}
+          socket={socket}
+          loading={loading}
+        />
+        <ChatMain 
+          selectedConversation={currentConversation}
+          socket={socket}
+          onMessageSent={handleMessageSent}
+        />
       </Box>
     </Box>
   );

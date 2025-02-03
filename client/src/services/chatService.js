@@ -89,11 +89,13 @@ const chatService = {
   // Get all messages for a conversation
   getMessages: async (conversationId) => {
     try {
-      const response = await api.get(
-        `/conversations/${conversationId}/messages`
-      );
-      return response.data;
+      const response = await api.get(`/messages/${conversationId}`);
+      return {
+        data: response.data.messages || [],
+        status: response.status
+      };
     } catch (error) {
+      console.error("Error getting messages:", error);
       throw error;
     }
   },
@@ -101,15 +103,13 @@ const chatService = {
   // Send a new message
   sendMessage: async (conversationId, content) => {
     try {
-      const response = await api.post(
-        `/conversations/${conversationId}/messages`,
-        {
-          content,
-          type: "text",
-        }
-      );
-      return response.data;
+      const response = await api.post(`/messages/${conversationId}`, { content });
+      return {
+        data: response.data,
+        status: response.status
+      };
     } catch (error) {
+      console.error("Error sending message:", error);
       throw error;
     }
   },

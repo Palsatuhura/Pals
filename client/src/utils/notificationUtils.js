@@ -1,26 +1,36 @@
 import { toast } from 'react-toastify';
 
-export const showNotification = (message, type = 'info') => {
-  const options = {
-    position: "top-right",
-    autoClose: 3000,
-    hideProgressBar: false,
-    closeOnClick: true,
-    pauseOnHover: true,
-    draggable: true,
-  };
+const defaultOptions = {
+  position: "top-right",
+  autoClose: 3000,
+  hideProgressBar: false,
+  closeOnClick: true,
+  pauseOnHover: true,
+  draggable: true,
+  theme: "dark",
+  style: {
+    background: '#333',
+    color: '#fff',
+    borderRadius: '8px',
+    padding: '16px',
+    fontSize: '14px'
+  }
+};
 
-  switch (type) {
+export const showNotification = (message, type = 'info') => {
+  if (!message) return;
+
+  switch (type.toLowerCase()) {
     case 'success':
-      toast.success(message, options);
+      toast.success(message, defaultOptions);
       break;
     case 'error':
-      toast.error(message, options);
+      toast.error(message, defaultOptions);
       break;
     case 'warning':
-      toast.warning(message, options);
+      toast.warning(message, defaultOptions);
       break;
     default:
-      toast.info(message, options);
+      toast.info(message, defaultOptions);
   }
 };
