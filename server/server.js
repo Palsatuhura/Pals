@@ -24,6 +24,7 @@ const io = socketIo(server, {
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   },
   transports: ["websocket", "polling"],
@@ -32,16 +33,48 @@ const io = socketIo(server, {
 // Express CORS setup
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["Content-Range", "X-Content-Range"],
   })
 );
+
+// Debug middleware for CORS
+app.use((req, res, next) => {
+  console.log('Request Headers:', req.headers);
+  console.log('Request Method:', req.method);
+  console.log('Request Origin:', req.headers.origin);
+  next();
+});
+
+// Handle preflight requests
+app.options('*', cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
 // Make io accessible to routes
 app.set("io", io);
 
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/auth", authRoutes);

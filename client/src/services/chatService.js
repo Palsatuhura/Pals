@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 // Use environment variable for API URL
 const API_URL = `${import.meta.env.VITE_API_URL}/api`;
 
-// Create axios instance with base configuration
+// Create axios instance with default config
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -23,20 +23,29 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error("Request error:", error);
     return Promise.reject(error);
   }
 );
 
-// Add response interceptor to handle errors
+// Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Clear local storage and redirect to login on auth error
-      localStorage.clear();
-      window.location.href = "/login";
+    console.error("Response error:", error);
+    if (error.response) {
+      // Server responded with error status
+      console.error("Server error:", error.response.data);
+      return Promise.reject(error.response.data);
+    } else if (error.request) {
+      // Request was made but no response
+      console.error("Network error:", error.request);
+      return Promise.reject({ message: "Network error - please check your connection" });
+    } else {
+      // Something else happened
+      console.error("Error:", error.message);
+      return Promise.reject({ message: error.message });
     }
-    return Promise.reject(error);
   }
 );
 
