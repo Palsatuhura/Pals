@@ -31,10 +31,40 @@ app.use(
 app.use(express.json());
 
 // Connect to MongoDB
+console.log('Attempting to connect to MongoDB...');
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 30000,
+    heartbeatFrequencyMS: 2000,
+    ssl: true,
+    tls: true,
+    tlsAllowInvalidCertificates: false,
+    tlsAllowInvalidHostnames: false,
+    retryWrites: true,
+    w: 'majority'
+  })
   .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .catch((err) => {
+    console.error("MongoDB connection error details:", {
+      name: err.name,
+      message: err.message,
+      code: err.code,
+      codeName: err.codeName,
+      serverHost: err.serverHost,
+      reason: err.reason ? {
+        type: err.reason.type,
+        servers: Array.from(err.reason.servers.entries()).map(([key, value]) => ({
+          address: key,
+          type: value.type,
+          state: value.state,
+          error: value.error
+        }))
+      } : null
+    });
+    process.exit(1);
+  });
 
 // Routes
 app.use("/api/auth", require("./routes/authRoutes"));
