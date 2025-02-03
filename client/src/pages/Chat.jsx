@@ -19,28 +19,30 @@ const Chat = () => {
 
   // Initialize socket connection
   useEffect(() => {
-    const newSocket = io("http://localhost:5000", {
-      auth: {
-        token: localStorage.getItem("token")
-      }
-    });
+    // Initialize socket connection
+    if (!socket) {
+      const newSocket = io(import.meta.env.VITE_WS_URL, {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+      });
 
-    newSocket.on("connect", () => {
-      console.log("Socket connected");
-      const userId = localStorage.getItem("userId");
-      newSocket.emit("login", userId);
-    });
+      newSocket.on("connect", () => {
+        console.log("Socket connected");
+        const userId = localStorage.getItem("userId");
+        newSocket.emit("login", userId);
+      });
 
-    newSocket.on("connect_error", (error) => {
-      console.error("Socket connection error:", error);
-      showNotification("Connection error", "error");
-    });
+      newSocket.on("connect_error", (error) => {
+        console.error("Socket connection error:", error);
+        showNotification("Connection error", "error");
+      });
 
-    setSocket(newSocket);
+      setSocket(newSocket);
 
-    return () => {
-      newSocket.close();
-    };
+      return () => {
+        newSocket.close();
+      };
+    }
   }, []);
 
   // Auth check

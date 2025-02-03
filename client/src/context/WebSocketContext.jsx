@@ -16,7 +16,7 @@ export const WebSocketProvider = ({ children }) => {
 
   const connect = () => {
     if (!socket.current) {
-      socket.current = io('http://localhost:5000', {
+      socket.current = io(import.meta.env.VITE_WS_URL, {
         withCredentials: true,
         transports: ['websocket', 'polling'],
       });

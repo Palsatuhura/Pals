@@ -42,34 +42,28 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    // Initialize socket connection
+    if (!socket) {
+      const newSocket = io(import.meta.env.VITE_WS_URL, {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+      });
 
-    const newSocket = io('http://localhost:5000', {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      extraHeaders: {
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
+      newSocket.on('connect', () => {
+        console.log('Connected to WebSocket server');
+      });
 
-    newSocket.on('connect', () => {
-      console.log('Socket connected');
-      const userId = localStorage.getItem('userId');
-      if (userId) {
-        newSocket.emit('login', userId);
-      }
-    });
+      newSocket.on('disconnect', () => {
+        console.log('Disconnected from WebSocket server');
+      });
 
-    newSocket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-    });
-
-    setSocket(newSocket);
+      setSocket(newSocket);
+    }
 
     return () => {
-      newSocket.close();
+      if (socket) {
+        socket.disconnect();
+      }
     };
   }, []);
 
