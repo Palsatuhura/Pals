@@ -1,45 +1,48 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
-  TextField,
   Button,
+  TextField,
   Typography,
-  Paper,
-  IconButton,
-  InputAdornment,
-  Slide,
-  Fade,
+  Container,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Checkbox,
-  FormControlLabel,
+  IconButton,
+  InputAdornment,
+  Slide,
 } from "@mui/material";
 import {
   Person as PersonIcon,
-  Close as CloseIcon,
+  Lock as LockIcon,
+  ContentCopy as ContentCopyIcon,
   Login as LoginIcon,
-  Key as KeyIcon,
+  Warning as WarningIcon,
+  Close as CloseIcon,
 } from "@mui/icons-material";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import WarningIcon from "@mui/icons-material/Warning";
 import chatService from "../services/chatService";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
+import { useWebSocket } from "../context/WebSocketContext";
 
-const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
+const Login = () => {
   const navigate = useNavigate();
+  const { showNotification } = useNotification();
+  const { websocketService } = useWebSocket();
+  const { setIsAuthenticated } = useAuth();
+
   const [username, setUsername] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showLogin, setShowLogin] = useState(false);
-  const [isSignup, setIsSignup] = useState(false);
-  const [showSessionId, setShowSessionId] = useState(false);
+  const [isSignup, setIsSignup] = useState(false); // Default to login view
+  const [showSessionIdDialog, setShowSessionIdDialog] = useState(false);
+  const [showSessionIdInput, setShowSessionIdInput] = useState(false); // Show session ID input by default
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [newSessionId, setNewSessionId] = useState("");
   const [copied, setCopied] = useState(false);
-  const [confirmCopy, setConfirmCopy] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const generateSessionId = (username) => {
     const prefix = username.substring(0, 2).toUpperCase();
@@ -78,7 +81,7 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
   };
 
   const handleGetStarted = () => {
-    setShowLogin(true);
+    setShowSessionIdInput(true);
     setIsSignup(false); // Show login view first
   };
 
@@ -98,14 +101,24 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
     setSessionId(formatted);
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
       if (isSignup) {
         // Handle signup
+        if (!username) {
+          setError("Please enter a username");
+          showNotification({
+            message: "Please enter a username",
+            severity: "error",
+          });
+          setLoading(false);
+          return;
+        }
+
         const response = await chatService.register({ username });
         handleLoginSuccess(response);
       } else {
@@ -114,22 +127,26 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
           setError("Please enter your session ID");
           showNotification({
             message: "Please enter your session ID",
-            severity: "error"
+            severity: "error",
           });
           setLoading(false);
           return;
         }
 
-        const response = await chatService.login({ sessionId: sessionId.toUpperCase() });
+        const response = await chatService.login({
+          sessionId: sessionId.toUpperCase(),
+        });
         handleLoginSuccess(response);
       }
     } catch (error) {
-      console.error("Login/Signup error:", error);
-      const errorMessage = error.response?.data?.message || "An error occurred during authentication";
+      console.error("Auth error:", error);
+      const errorMessage =
+        error.response?.data?.message ||
+        "An error occurred during authentication";
       setError(errorMessage);
       showNotification({
         message: errorMessage,
-        severity: "error"
+        severity: "error",
       });
     } finally {
       setLoading(false);
@@ -137,95 +154,112 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
   };
 
   const handleLoginSuccess = (response) => {
-    if (!response.data || !response.data.user || !response.data.token) {
-      throw new Error("Invalid response from server");
-    }
-
-    // Store auth data
+    // Store auth token
     localStorage.setItem("token", response.data.token);
     localStorage.setItem("userId", response.data.user._id);
     localStorage.setItem("username", response.data.user.username);
-    localStorage.setItem("sessionId", response.data.user.sessionId);
 
     // If this is a new registration, show the session ID
     if (isSignup) {
       setNewSessionId(response.data.user.sessionId);
-      setShowSessionId(true);
+      setShowSessionIdDialog(true);
     } else {
       // Connect to websocket if available
-      if (websocketService && typeof websocketService.connect === 'function') {
+      if (websocketService && typeof websocketService.connect === "function") {
         websocketService.connect();
       }
 
-      // Set authenticated state
       setIsAuthenticated(true);
-
       // Show success notification
       showNotification({
         message: `Welcome back, ${response.data.user.username}!`,
-        severity: "success"
+        severity: "success",
       });
 
-      // Navigate to main chat
-      navigate("/");
+      // Navigate to chat
+      navigate("/chat");
     }
-  };
-
-  const urlBase64ToUint8Array = (base64String) => {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
   };
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(newSessionId);
+      showNotification({
+        message: "Session ID copied to clipboard!",
+        severity: "success",
+      });
       setCopied(true);
-      showNotification("Session ID copied to clipboard!");
-      setTimeout(() => setCopied(false), 3000);
-    } catch (err) {
-      showNotification("Failed to copy. Please copy manually.", "error");
+      setShowConfirmDialog(true);
+    } catch (error) {
+      showNotification({
+        message: "Failed to copy Session ID",
+        severity: "error",
+      });
     }
   };
 
   const handleConfirmCopy = () => {
-    if (!confirmCopy) {
-      showNotification(
-        "Please confirm that you have saved your session ID",
-        "warning"
-      );
-      return;
+    // Connect websocket
+    if (websocketService && typeof websocketService.connect === "function") {
+      websocketService.connect();
     }
-    setShowSessionId(false);
-    setConfirmCopy(false);
-    setCopied(false);
-    setShowLogin(false);
+
     setIsAuthenticated(true);
-    showNotification("Account created successfully! Welcome to Pals");
+    setShowSessionIdDialog(false);
+    setShowConfirmDialog(false);
+
+    // Show success notification
+    showNotification({
+      message: "Registration successful! Welcome to Pals",
+      severity: "success",
+    });
+
+    // Navigate to chat
+    navigate("/chat", { replace: true });
+  };
+
+  const inputSx = {
+    "& .MuiFilledInput-root": {
+      backgroundColor: "#1E2C3A",
+      "& fieldset": {
+        borderColor: "rgba(255, 255, 255, 0.23)",
+      },
+      "&:hover fieldset": {
+        borderColor: "rgba(255, 255, 255, 0.4)",
+      },
+      "&.Mui-focused fieldset": {
+        borderColor: "#2B5278",
+      },
+    },
+    "& .MuiInputLabel-root": {
+      color: "rgba(255, 255, 255, 0.7)",
+      "&.Mui-focused": {
+        color: "#2B5278",
+      },
+    },
+    "& .MuiInputBase-input": {
+      color: "#fff",
+    },
+    "& .MuiInputAdornment-root": {
+      color: "rgba(255, 255, 255, 0.7)",
+    },
   };
 
   return (
     <Box
       sx={{
-        height: "100vh",
-        width: "100vw",
+        minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        bgcolor: "#f8fafc",
-        background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
-        position: "fixed", // Changed from relative
+        bgcolor: "#0F1620",
+        position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        overflow: "hidden",
-        m: 0, // Remove margin
-        p: 0, // Remove padding
+        zIndex: 1,
       }}
     >
       {/* Background Pattern */}
@@ -265,7 +299,7 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
             variant="h3"
             sx={{
               fontWeight: 700,
-              color: "#1e293b",
+              color: "Secondary",
               textAlign: "center",
               mb: 2,
               letterSpacing: "-1px",
@@ -276,7 +310,7 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
           <Typography
             variant="h6"
             sx={{
-              color: "#64748b",
+              color: "#fff",
               textAlign: "center",
               mb: 6,
               maxWidth: "600px",
@@ -317,19 +351,19 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
 
         {/* Login/Signup Dialog */}
         <Dialog
-          open={showLogin}
-          onClose={() => setShowLogin(false)}
+          open={showSessionIdInput}
+          onClose={() => setShowSessionIdInput(false)}
           TransitionComponent={Slide}
           TransitionProps={{ direction: "up" }}
           PaperProps={{
             sx: {
               borderRadius: "20px",
-              bgcolor: "#ffffff",
+              bgcolor: "#17212B",
               maxWidth: "95%",
               width: "440px",
               mx: 2,
               backgroundImage:
-                "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
+                "linear-gradient(135deg, #17212B 0%, #1E2C3A 100%)",
               boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
               overflow: "hidden",
             },
@@ -349,12 +383,12 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
             <Typography
               component="div"
               variant="h5"
-              sx={{ fontWeight: 700, letterSpacing: "-0.5px" }}
+              sx={{ fontWeight: 700, letterSpacing: "-0.5px", color: "#fff" }}
             >
               {isSignup ? "Join Pals" : "Welcome to Pals"}
             </Typography>
             <IconButton
-              onClick={() => setShowLogin(false)}
+              onClick={() => setShowSessionIdInput(false)}
               sx={{
                 position: "absolute",
                 right: 16,
@@ -373,59 +407,34 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
           <DialogContent sx={{ px: 4, pb: 4, pt: 2 }}>
             <Box component="form" onSubmit={handleSubmit}>
               {isSignup ? (
-                <TextField
-                  fullWidth
-                  label="Username"
-                  variant="filled"
-                  value={username}
-                  onChange={handleUsernameChange}
-                  error={!!error && error.includes("Username")}
-                  helperText={
-                    error && error.includes("Username")
-                      ? error
-                      : "Minimum 3 letters, no numbers or symbols"
-                  }
-                  disabled={!isSignup}
-                  inputProps={{
-                    maxLength: 20,
-                  }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <PersonIcon sx={{ color: "#64748b" }} />
-                      </InputAdornment>
-                    ),
-                    disableUnderline: true,
-                  }}
-                  sx={{
-                    mb: 2.5,
-                    "& .MuiInputLabel-root": {
-                      color: "#64748b",
-                      "&.Mui-focused": {
-                        color: "#1e293b",
-                      },
-                      "&.MuiInputLabel-shrink": {
-                        transform: "translate(12px, -4px) scale(0.75)",
-                      },
-                    },
-                    "& .MuiFilledInput-root": {
-                      backgroundColor: "#f8fafc",
-                      borderRadius: 1,
-                      border: "1px solid #e2e8f0",
-                      "&:hover": {
-                        backgroundColor: "#f8fafc",
-                        border: "1px solid #94a3b8",
-                      },
-                      "&.Mui-focused": {
-                        backgroundColor: "#f8fafc",
-                        border: "1px solid #1e293b",
-                      },
-                      "&::before, &::after": {
-                        display: "none",
-                      },
-                    },
-                  }}
-                />
+                <Box>
+                  <TextField
+                    fullWidth
+                    label="Username"
+                    variant="filled"
+                    value={username}
+                    onChange={handleUsernameChange}
+                    error={!!error && error.includes("Username")}
+                    helperText={
+                      error && error.includes("Username")
+                        ? error
+                        : "Minimum 3 letters, no numbers or symbols"
+                    }
+                    disabled={!isSignup}
+                    inputProps={{
+                      maxLength: 20,
+                    }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PersonIcon sx={{ color: "#64748b" }} />
+                        </InputAdornment>
+                      ),
+                      disableUnderline: true,
+                    }}
+                    sx={inputSx}
+                  />
+                </Box>
               ) : (
                 <TextField
                   fullWidth
@@ -446,39 +455,12 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <KeyIcon sx={{ color: "#64748b" }} />
+                        <LoginIcon sx={{ color: "#64748b" }} />
                       </InputAdornment>
                     ),
                     disableUnderline: true,
                   }}
-                  sx={{
-                    mb: 1,
-                    "& .MuiInputLabel-root": {
-                      color: "#64748b",
-                      "&.Mui-focused": {
-                        color: "#1e293b",
-                      },
-                      "&.MuiInputLabel-shrink": {
-                        transform: "translate(12px, -4px) scale(0.75)",
-                      },
-                    },
-                    "& .MuiFilledInput-root": {
-                      backgroundColor: "#f8fafc",
-                      borderRadius: 1,
-                      border: "1px solid #e2e8f0",
-                      "&:hover": {
-                        backgroundColor: "#f8fafc",
-                        border: "1px solid #94a3b8",
-                      },
-                      "&.Mui-focused": {
-                        backgroundColor: "#f8fafc",
-                        border: "1px solid #1e293b",
-                      },
-                      "&::before, &::after": {
-                        display: "none",
-                      },
-                    },
-                  }}
+                  sx={inputSx}
                 />
               )}
 
@@ -536,64 +518,65 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
 
         {/* Session ID Dialog */}
         <Dialog
-          open={showSessionId}
-          TransitionComponent={Fade}
+          open={showSessionIdDialog}
+          maxWidth="sm"
+          fullWidth
           PaperProps={{
             sx: {
               borderRadius: "20px",
-              bgcolor: "#ffffff",
+              bgcolor: "#17212B",
               maxWidth: "95%",
               width: "440px",
               mx: 2,
-              overflow: "hidden",
+              background: "linear-gradient(135deg, #17212B 0%, #1E2C3A 100%)",
               boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              overflow: "hidden",
             },
           }}
         >
           <DialogTitle
-            component="div"
             sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              bgcolor: "#1e293b",
-              color: "white",
-              py: 2.5,
-              px: 3,
+              textAlign: "center",
+              color: "#fff",
+              fontSize: "1.5rem",
+              fontWeight: 600,
+              pt: 4,
             }}
           >
-            <WarningIcon sx={{ color: "#fbbf24" }} />
-            <Typography component="div" variant="h6" sx={{ fontWeight: 600 }}>
-              Important: Save Your Session ID
-            </Typography>
+            Important: Save Your Session ID
           </DialogTitle>
-
-          <DialogContent sx={{ p: 4 }}>
-            <Typography sx={{ mb: 3, color: "#475569", lineHeight: 1.6 }}>
-              This is your unique session ID. You'll need it to sign in to your
-              account. Please save it in a secure location - you won't be able
-              to recover it if lost.
-            </Typography>
-
-            <Paper
+          <DialogContent sx={{ px: 4, pb: 4 }}>
+            <Typography
+              variant="body1"
               sx={{
-                p: 3,
                 mb: 3,
-                bgcolor: "#f8fafc",
-                borderRadius: "12px",
-                border: "1px dashed #94a3b8",
+                color: "rgba(255, 255, 255, 0.7)",
+                textAlign: "center",
+              }}
+            >
+              Please save this session ID. You'll need it to log in to your
+              account.
+            </Typography>
+            <Box
+              sx={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
+                gap: 1,
+                mb: 3,
+                p: 2,
+                borderRadius: 1,
+                bgcolor: "#1E2C3A",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
               <Typography
+                variant="h6"
                 sx={{
+                  flex: 1,
+                  textAlign: "center",
                   fontFamily: "monospace",
-                  fontSize: "1.1rem",
-                  fontWeight: 600,
-                  color: "#1e293b",
-                  letterSpacing: "0.5px",
+                  color: "#fff",
+                  userSelect: "all",
                 }}
               >
                 {newSessionId}
@@ -601,65 +584,120 @@ const Login = ({ setIsAuthenticated, showNotification, websocketService }) => {
               <IconButton
                 onClick={handleCopy}
                 sx={{
-                  color: copied ? "#059669" : "#64748b",
+                  color: "rgba(255, 255, 255, 0.7)",
                   "&:hover": {
-                    bgcolor: "#f1f5f9",
+                    color: "#fff",
+                    bgcolor: "rgba(255, 255, 255, 0.1)",
                   },
                 }}
               >
-                {copied ? <CheckCircleIcon /> : <ContentCopyIcon />}
+                <ContentCopyIcon />
               </IconButton>
-            </Paper>
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={confirmCopy}
-                  onChange={(e) => setConfirmCopy(e.target.checked)}
-                  sx={{
-                    color: "#64748b",
-                    "&.Mui-checked": {
-                      color: "#1e293b",
-                    },
-                  }}
-                />
-              }
-              label="I have saved my session ID in a secure location"
-              sx={{
-                "& .MuiFormControlLabel-label": {
-                  fontSize: "0.95rem",
-                  color: "#475569",
-                },
-              }}
-            />
+            </Box>
+            <Typography
+              variant="body2"
+              color="error"
+              sx={{ mb: 2, textAlign: "center" }}
+            >
+              Warning: This ID will not be shown again!
+            </Typography>
           </DialogContent>
-
-          <DialogActions sx={{ px: 4, pb: 4 }}>
+          <DialogActions
+            sx={{
+              px: 4,
+              pb: 4,
+              justifyContent: "center",
+            }}
+          >
             <Button
-              fullWidth
               variant="contained"
               onClick={handleConfirmCopy}
-              disabled={!confirmCopy}
               sx={{
-                py: 1.5,
-                bgcolor: "#1e293b",
-                color: "white",
-                borderRadius: "12px",
-                textTransform: "none",
-                fontSize: "1.1rem",
-                fontWeight: 600,
-                boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                bgcolor: "#2B5278",
+                color: "#fff",
+                px: 4,
                 "&:hover": {
-                  bgcolor: "#0f172a",
-                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
-                },
-                "&.Mui-disabled": {
-                  bgcolor: "#e2e8f0",
-                  color: "#94a3b8",
+                  bgcolor: "#1E3A5F",
                 },
               }}
             >
-              Continue to Chat
+              I've Saved My Session ID
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Confirmation Dialog */}
+        <Dialog
+          open={showConfirmDialog}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: "20px",
+              bgcolor: "#17212B",
+              maxWidth: "95%",
+              width: "440px",
+              mx: 2,
+              background: "linear-gradient(135deg, #17212B 0%, #1E2C3A 100%)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              overflow: "hidden",
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              textAlign: "center",
+              color: "#fff",
+              fontSize: "1.5rem",
+              fontWeight: 600,
+              pt: 4,
+            }}
+          >
+            Confirm
+          </DialogTitle>
+          <DialogContent sx={{ px: 4, pb: 4 }}>
+            <Typography
+              variant="body1"
+              sx={{
+                textAlign: "center",
+                color: "rgba(255, 255, 255, 0.7)",
+              }}
+            >
+              Have you saved your session ID? You won't be able to access your
+              account without it.
+            </Typography>
+          </DialogContent>
+          <DialogActions
+            sx={{
+              px: 4,
+              pb: 4,
+              justifyContent: "center",
+              gap: 2,
+            }}
+          >
+            <Button
+              onClick={() => setShowConfirmDialog(false)}
+              sx={{
+                color: "rgba(255, 255, 255, 0.7)",
+                "&:hover": {
+                  bgcolor: "rgba(255, 255, 255, 0.1)",
+                },
+              }}
+            >
+              No, Go Back
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleConfirmCopy}
+              sx={{
+                bgcolor: "#2B5278",
+                color: "#fff",
+                "&:hover": {
+                  bgcolor: "#1E3A5F",
+                },
+              }}
+            >
+              Yes, I've Saved It
             </Button>
           </DialogActions>
         </Dialog>

@@ -14,6 +14,10 @@ import theme from "./theme";
 import "./App.css";
 import { CssBaseline } from "@mui/material";
 import { io } from "socket.io-client";
+import { AuthProvider } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
+import { WebSocketProvider } from "./context/WebSocketContext";
+import AppRoutes from "./AppRoutes";
 
 // Page imports
 import Login from "./pages/Login";
@@ -78,88 +82,57 @@ function App() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <SocketContext.Provider value={socket}>
-        <CssBaseline />
-        <Router>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              minHeight: "100vh",
-              bgcolor: "background.default",
-              color: "text.primary",
-            }}
-          >
-            <Box
-              component="main"
-              sx={{
-                flexGrow: 1,
-                display: "flex",
-                flexDirection: "column",
-                position: "relative",
-              }}
-            >
-              <Routes>
-                <Route
-                  path="/"
-                  element={
-                    !isAuthenticated ? (
-                      <Login
-                        setIsAuthenticated={setIsAuthenticated}
-                        showNotification={handleShowNotification}
-                      />
-                    ) : (
-                      <Navigate to="/chat" />
-                    )
-                  }
-                />
+    <Router>
+      <NotificationProvider>
+        <WebSocketProvider>
+          <AuthProvider>
+            <ThemeProvider theme={theme}>
+              <SocketContext.Provider value={socket}>
+                <CssBaseline />
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: "100vh",
+                    bgcolor: "background.default",
+                    color: "text.primary",
+                  }}
+                >
+                  <Box
+                    component="main"
+                    sx={{
+                      flexGrow: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      position: "relative",
+                    }}
+                  >
+                    <AppRoutes
+                      isAuthenticated={isAuthenticated}
+                      setIsAuthenticated={setIsAuthenticated}
+                      showNotification={handleShowNotification}
+                    />
+                  </Box>
 
-                <Route
-                  path="/chat"
-                  element={
-                    isAuthenticated ? (
-                      <Chat showNotification={handleShowNotification} />
-                    ) : (
-                      <Navigate to="/" />
-                    )
-                  }
-                />
-
-                <Route
-                  path="/profile"
-                  element={isAuthenticated ? <Profile /> : <Navigate to="/" />}
-                />
-
-                <Route
-                  path="/help"
-                  element={
-                    isAuthenticated ? (
-                      <Help showNotification={handleShowNotification} />
-                    ) : (
-                      <Navigate to="/" />
-                    )
-                  }
-                />
-              </Routes>
-            </Box>
-
-            <ToastContainer
-              position="top-right"
-              autoClose={3000}
-              hideProgressBar={false}
-              newestOnTop
-              closeOnClick
-              rtl={false}
-              pauseOnFocusLoss
-              draggable
-              pauseOnHover
-              theme="dark"
-            />
-          </Box>
-        </Router>
-      </SocketContext.Provider>
-    </ThemeProvider>
+                  <ToastContainer
+                    position="top-right"
+                    autoClose={3000}
+                    hideProgressBar={false}
+                    newestOnTop
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    draggable
+                    pauseOnHover
+                    theme="dark"
+                  />
+                </Box>
+              </SocketContext.Provider>
+            </ThemeProvider>
+          </AuthProvider>
+        </WebSocketProvider>
+      </NotificationProvider>
+    </Router>
   );
 }
 

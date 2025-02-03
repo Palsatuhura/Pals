@@ -109,10 +109,15 @@ const ChatMain = ({ selectedConversation }) => {
 
       setLoading(true);
       try {
-        const response = await chatService.getMessages(selectedConversation._id);
+        const response = await chatService.getMessages(
+          selectedConversation._id
+        );
         // Ensure we have an array of messages
-        const messageArray = Array.isArray(response.data) ? response.data : 
-                           Array.isArray(response.data.messages) ? response.data.messages : [];
+        const messageArray = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray(response.data.messages)
+          ? response.data.messages
+          : [];
         setMessages(messageArray);
         scrollToBottom();
       } catch (error) {
@@ -205,7 +210,7 @@ const ChatMain = ({ selectedConversation }) => {
               width: 40,
               height: 40,
               borderRadius: "50%",
-              backgroundColor: generateAvatarColor(username),
+              backgroundColor: generateAvatarColor(username[0]),
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
