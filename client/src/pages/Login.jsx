@@ -346,7 +346,7 @@ const Login = () => {
             transition: "all 0.2s ease-in-out",
           }}
         >
-          Get Started
+          Get Starte
         </Button>
 
         {/* Login/Signup Dialog */}

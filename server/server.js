@@ -14,7 +14,10 @@ const app = express();
 const server = http.createServer(app);
 
 // CORS configuration
-const allowedOrigins = ["http://localhost:3000", "http://localhost:5173"];
+const allowedOrigins = [
+  "https://pals-chat.vercel.app",
+  "http://localhost:5173",
+];
 
 // Socket.io setup with CORS
 const io = socketIo(server, {
