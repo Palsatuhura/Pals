@@ -21,9 +21,16 @@ const Chat = () => {
   useEffect(() => {
     // Initialize socket connection
     if (!socket) {
+      const token = localStorage.getItem("token");
       const newSocket = io(import.meta.env.VITE_WS_URL, {
         withCredentials: true,
         transports: ['websocket', 'polling'],
+        auth: {
+          token
+        },
+        extraHeaders: {
+          Authorization: `Bearer ${token}`
+        }
       });
 
       newSocket.on("connect", () => {
@@ -34,7 +41,10 @@ const Chat = () => {
 
       newSocket.on("connect_error", (error) => {
         console.error("Socket connection error:", error);
-        showNotification("Connection error", "error");
+        showNotification({
+          message: "Connection error: " + error.message,
+          severity: "error"
+        });
       });
 
       setSocket(newSocket);

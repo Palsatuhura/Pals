@@ -16,9 +16,16 @@ export const WebSocketProvider = ({ children }) => {
 
   const connect = () => {
     if (!socket.current) {
+      const token = localStorage.getItem("token");
       socket.current = io(import.meta.env.VITE_WS_URL, {
         withCredentials: true,
         transports: ['websocket', 'polling'],
+        auth: {
+          token
+        },
+        extraHeaders: {
+          Authorization: `Bearer ${token}`
+        }
       });
 
       socket.current.on('connect', () => {

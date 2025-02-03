@@ -44,9 +44,16 @@ function App() {
   useEffect(() => {
     // Initialize socket connection
     if (!socket) {
+      const token = localStorage.getItem("token");
       const newSocket = io(import.meta.env.VITE_WS_URL, {
         withCredentials: true,
         transports: ['websocket', 'polling'],
+        auth: {
+          token
+        },
+        extraHeaders: {
+          Authorization: `Bearer ${token}`
+        }
       });
 
       newSocket.on('connect', () => {
