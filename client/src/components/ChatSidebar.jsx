@@ -141,7 +141,10 @@ const formatUsername = (username) => {
 
 const getFriend = (conversation, userId) => {
   if (!conversation?.participants || !userId) {
-    console.log('Missing conversation participants or userId:', { conversation, userId });
+    console.log("Missing conversation participants or userId:", {
+      conversation,
+      userId,
+    });
     return null;
   }
 
@@ -149,19 +152,19 @@ const getFriend = (conversation, userId) => {
   if (conversation.friend) {
     return conversation.friend;
   }
-  
+
   // Fallback to finding friend in participants array
   const friend = conversation.participants.find(
     (p) => p?._id?.toString() !== userId?.toString()
   );
-  
+
   if (!friend) {
-    console.log('No friend found in conversation:', { 
+    console.log("No friend found in conversation:", {
       participants: conversation.participants,
-      userId 
+      userId,
     });
   }
-  
+
   return friend;
 };
 
@@ -284,13 +287,13 @@ const ChatSidebar = ({
       const userId = localStorage.getItem("userId");
       const username = localStorage.getItem("username");
       const sessionId = localStorage.getItem("sessionId");
-      
+
       if (!userId) return null;
-      
+
       return {
         _id: userId,
         username,
-        sessionId
+        sessionId,
       };
     } catch (error) {
       console.error("Error loading user from localStorage:", error);
@@ -304,16 +307,16 @@ const ChatSidebar = ({
         const userId = localStorage.getItem("userId");
         const username = localStorage.getItem("username");
         const sessionId = localStorage.getItem("sessionId");
-        
+
         if (!userId) {
           setUser(null);
           return;
         }
-        
+
         setUser({
           _id: userId,
           username,
-          sessionId
+          sessionId,
         });
       } catch (error) {
         console.error("Error loading user from localStorage:", error);
@@ -339,7 +342,7 @@ const ChatSidebar = ({
 
         const checkAllParticipantsStatus = async () => {
           const friendIds = conversations
-            .map(conv => getFriend(conv, user._id)?._id)
+            .map((conv) => getFriend(conv, user._id)?._id)
             .filter(Boolean);
 
           console.log("Checking status for friends:", friendIds);
@@ -348,7 +351,10 @@ const ChatSidebar = ({
             try {
               const status = await websocketService.getUserStatus(friendId);
               console.log(`Status for ${friendId}:`, status);
-              return { userId: friendId, isOnline: status?.status === "online" };
+              return {
+                userId: friendId,
+                isOnline: status?.status === "online",
+              };
             } catch (error) {
               console.error(`Error getting status for ${friendId}:`, error);
               return { userId: friendId, isOnline: false };
@@ -369,9 +375,9 @@ const ChatSidebar = ({
 
         const handleStatusChange = ({ userId, status }) => {
           console.log(`Real-time status change for ${userId}:`, status);
-          setOnlineUsers(prev => ({
+          setOnlineUsers((prev) => ({
             ...prev,
-            [userId]: status === "online"
+            [userId]: status === "online",
           }));
         };
 
@@ -495,34 +501,29 @@ const ChatSidebar = ({
   const loadConversations = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/conversations", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/conversations`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          withCredentials: true,
+        }
+      );
 
-      if (!response.ok) {
-        throw new Error("Failed to load conversations");
-      }
-
-      const data = await response.json();
-      console.log("Loaded conversations:", data);
-
-      const sortedConversations = data.sort((a, b) => {
-        const timeA = a.lastMessage
-          ? new Date(a.lastMessage.createdAt)
-          : new Date(0);
-        const timeB = b.lastMessage
-          ? new Date(b.lastMessage.createdAt)
-          : new Date(0);
-        return timeB - timeA;
+      // Sort conversations by last message timestamp
+      const sortedConversations = response.data.sort((a, b) => {
+        const timestampA = a.lastMessage?.timestamp || a.createdAt;
+        const timestampB = b.lastMessage?.timestamp || b.createdAt;
+        return new Date(timestampB) - new Date(timestampA);
       });
 
       setConversations(sortedConversations);
+      setLoading(false);
     } catch (error) {
       console.error("Error loading conversations:", error);
       setError("Failed to load conversations");
-    } finally {
       setLoading(false);
     }
   };
@@ -643,9 +644,15 @@ const ChatSidebar = ({
             onClick={() => handleConversationClick(conversation)}
             sx={{
               cursor: "pointer",
-              bgcolor: selectedConversation?._id === conversation._id ? "#2B5278" : "transparent",
+              bgcolor:
+                selectedConversation?._id === conversation._id
+                  ? "#2B5278"
+                  : "transparent",
               "&:hover": {
-                bgcolor: selectedConversation?._id === conversation._id ? "#2B5278" : "#1E2C3A",
+                bgcolor:
+                  selectedConversation?._id === conversation._id
+                    ? "#2B5278"
+                    : "#1E2C3A",
               },
               p: 2,
             }}
@@ -657,7 +664,9 @@ const ChatSidebar = ({
                 variant="dot"
                 sx={{
                   "& .MuiBadge-badge": {
-                    backgroundColor: onlineUsers[conversation.friend?._id] ? "#ceed9f" : "transparent",
+                    backgroundColor: onlineUsers[conversation.friend?._id]
+                      ? "#ceed9f"
+                      : "transparent",
                     boxShadow: onlineUsers[conversation.friend?._id]
                       ? `0 0 0 2px #17212b, 0 0 0 4px #ceed9f40`
                       : "none",

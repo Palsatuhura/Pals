@@ -49,25 +49,27 @@ app.use(
 
 // Debug middleware for CORS
 app.use((req, res, next) => {
-  console.log('Request Headers:', req.headers);
-  console.log('Request Method:', req.method);
-  console.log('Request Origin:', req.headers.origin);
+  console.log("Request Method:", req.method);
+  console.log("Request Origin:", req.headers.origin);
   next();
 });
 
 // Handle preflight requests
-app.options('*', cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
+app.options(
+  "*",
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 // Make io accessible to routes
 app.set("io", io);
