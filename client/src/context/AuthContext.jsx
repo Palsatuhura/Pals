@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import chatService from "../services/chatService";
 import websocketService from "../services/websocketService";
 
@@ -16,7 +16,20 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
 
-  const login = (userData) => {
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    const token = localStorage.getItem("token");
+
+    if (storedUser && token) {
+      setUser(JSON.parse(storedUser));
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const login = (userData, token) => {
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("token", token);
+
     setUser(userData);
     setIsAuthenticated(true);
   };
@@ -45,9 +58,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         isAuthenticated,
-        setIsAuthenticated,
         user,
-        setUser,
         login,
         logout,
       }}
