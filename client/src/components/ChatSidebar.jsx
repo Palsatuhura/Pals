@@ -444,8 +444,8 @@ const ChatSidebar = ({
             conversation={conversation}
             isSelected={selectedConversation?._id === conversation._id}
             onClick={() => onConversationSelect(conversation)}
-            onlineUsers={onlineUsers}
             userId={userId}
+            onlineUsers={onlineUsers}
           />
         ))}
       </List>

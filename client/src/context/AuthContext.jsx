@@ -16,6 +16,23 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
 
+  // AuthContext.js - Add status tracking
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        chatService.updateUserStatus("away");
+      } else {
+        chatService.updateUserStatus("online");
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user]);
+
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     const token = localStorage.getItem("token");
@@ -37,12 +54,12 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await chatService.logout();
+      await chatService.updateUserStatus("offline");
 
       setUser(null);
       setIsAuthenticated(false);
       localStorage.removeItem("token");
-      localStorage.removeItem("userId");
-      localStorage.removeItem("username");
+      localStorage.removeItem("user");
 
       if (websocketService) {
         websocketService.disconnect();
@@ -58,6 +75,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         isAuthenticated,
+        setIsAuthenticated,
         user,
         login,
         logout,

@@ -28,7 +28,9 @@ import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import SearchIcon from "@mui/icons-material/Search";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import { formatDistanceToNow } from "date-fns";
+import PropTypes from "prop-types";
+import { isValid } from "date-fns";
+import websocketService from "../services/websocketService";
 
 const MemoizedMessageBubble = memo(MessageBubble);
 
@@ -83,16 +85,21 @@ const UserName = styled(Typography)({
   fontWeight: 600,
   fontSize: "16px",
   lineHeight: "21px",
-  display: "-webkit-box",
-  "-webkit-line-clamp": 1,
-  "-webkit-box-orient": "vertical",
+  display: "flex",
+  WebkitLineClamp: 1, // Change to camelCase
+  WebkitBoxOrient: "vertical", // Change to camelCase
   overflow: "hidden",
 });
 
-const UserStatus = styled(Typography)(({ theme, isOnline }) => ({
+// const isOnline = Boolean(onlineUsers[conversation?.friend?._id]);
+// $isOnline = { isOnline };
+
+const UserStatus = styled(Typography, {
+  shouldForwardProp: (prop) => prop !== "$isOnline",
+})(({ theme, $isOnline }) => ({
   fontSize: "13px",
   lineHeight: "18px",
-  color: isOnline ? theme.palette.success.main : theme.palette.text.secondary,
+  color: $isOnline ? theme.palette.success.main : theme.palette.text.secondary,
   display: "flex",
   alignItems: "center",
   gap: "4px",
@@ -145,10 +152,10 @@ const InputContainer = styled(Box)(({ theme }) => ({
 const ChatMain = ({
   conversation,
   socket,
-  onlineUsers,
-  isConnected,
   user,
   onBackClick,
+  onlineUsers,
+  isConnected,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -158,6 +165,50 @@ const ChatMain = ({
   const messagesContainerRef = useRef(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+
+  const friend = conversation?.friend;
+  //const lastSeen = friend.lastSeen ? new Date(friend.lastSeen) : null;
+  console.log("Friend: ", friend);
+
+  console.log("online users: ", onlineUsers);
+
+  ChatMain.propTypes = {
+    conversation: PropTypes.object,
+    socket: PropTypes.object,
+    user: PropTypes.object.isRequired,
+    onBackClick: PropTypes.func,
+    onlineUsers: PropTypes.object,
+    isConnected: PropTypes.bool.isRequired,
+  };
+
+  useEffect(() => {
+    const handleStatusChange = (data) => {
+      if (data.userId === conversation?.friend?._id) {
+        setOnlineUsers((prev) => ({
+          ...prev,
+          [data.userId]: data.status === "online",
+        }));
+      }
+    };
+
+    const cleanup = websocketService.onUserStatusChange(handleStatusChange);
+
+    return () => {
+      cleanup();
+    };
+  }, [conversation?.friend?._id]);
+
+  useEffect(() => {
+    const handler = ({ userId, status, lastActive }) => {
+      if (userId === conversation.friend._id) {
+        setFriendStatus(status);
+        setLastSeen(lastActive);
+      }
+    };
+
+    websocketService.onUserStatusChange(handler);
+    return () => websocketService.offUserStatusChange(handler);
+  }, [conversation]);
 
   // Reset state when conversation changes
   useEffect(() => {
@@ -286,18 +337,23 @@ const ChatMain = ({
             </UserName>
             <UserStatus
               variant="body2"
-              isOnline={onlineUsers[conversation?.friend?._id]}
+              $isOnline={onlineUsers?.[conversation?.friend?._id]}
             >
-              {onlineUsers[conversation?.friend?._id] ? (
+              {onlineUsers?.[conversation?.friend?._id] ? (
                 <>
                   <OnlineBadge />
                   online
                 </>
               ) : (
-                `last seen ${format(
-                  new Date(conversation?.friend?.lastSeen || new Date()),
-                  "h:mm a"
-                ).toLowerCase()}`
+                `last seen ${
+                  conversation?.friend?.lastSeen &&
+                  isValid(new Date(conversation.friend.lastSeen))
+                    ? format(
+                        new Date(conversation.friend.lastSeen),
+                        "h:mm a"
+                      ).toLowerCase()
+                    : "recently"
+                }`
               )}
             </UserStatus>
           </UserInfo>

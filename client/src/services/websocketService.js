@@ -1,4 +1,4 @@
-import { io } from 'socket.io-client';
+import { io } from "socket.io-client";
 
 class WebSocketService {
   constructor() {
@@ -8,6 +8,13 @@ class WebSocketService {
     this.messageReadHandlers = new Set();
     this.statusHandlers = new Set();
     this.connectionPromise = null;
+    this.lastping = Date.now();
+    this.statusInterval = null;
+  }
+
+  async updateUserStatus(status) {
+    const socket = await this.ensureConnected();
+    socket.emit("update_status", { status });
   }
 
   connect() {
@@ -15,60 +22,71 @@ class WebSocketService {
       return this.connectionPromise;
     }
 
+    his.statusInterval = setInterval(() => {
+      if (Date.now() - this.lastPing > 30000) {
+        // 30 seconds
+        this.updateUserStatus("away");
+      }
+    }, 5000);
+
+    this.socket.on("ping", () => {
+      this.lastPing = Date.now();
+      this.updateUserStatus("online");
+    });
+
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem("token");
         if (!token) {
-          reject(new Error('No authentication token found'));
+          reject(new Error("No authentication token found"));
           return;
         }
 
-        this.socket = io('http://localhost:5000', {
+        this.socket = io("http://localhost:5000", {
           auth: { token },
-          transports: ['websocket'],
+          transports: ["websocket"],
           reconnection: true,
           reconnectionAttempts: 5,
-          reconnectionDelay: 1000
+          reconnectionDelay: 1000,
         });
 
-        this.socket.on('connect', () => {
-          console.log('WebSocket connected');
+        this.socket.on("connect", () => {
+          console.log("WebSocket connected");
           resolve(this.socket);
         });
 
-        this.socket.on('connect_error', (error) => {
-          console.error('WebSocket connection error:', error);
+        this.socket.on("connect_error", (error) => {
+          console.error("WebSocket connection error:", error);
           this.connectionPromise = null;
           reject(error);
         });
 
-        this.socket.on('disconnect', () => {
-          console.log('WebSocket disconnected');
+        this.socket.on("disconnect", () => {
+          console.log("WebSocket disconnected");
           this.connectionPromise = null;
         });
 
         // Handle incoming messages
-        this.socket.on('new_message', (data) => {
-          this.messageHandlers.forEach(handler => handler(data));
+        this.socket.on("new_message", (data) => {
+          this.messageHandlers.forEach((handler) => handler(data));
         });
 
         // Handle typing status
-        this.socket.on('user_typing', (data) => {
-          this.typingHandlers.forEach(handler => handler(data));
+        this.socket.on("user_typing", (data) => {
+          this.typingHandlers.forEach((handler) => handler(data));
         });
 
         // Handle message read status
-        this.socket.on('message_read', (data) => {
-          this.messageReadHandlers.forEach(handler => handler(data));
+        this.socket.on("message_read", (data) => {
+          this.messageReadHandlers.forEach((handler) => handler(data));
         });
 
         // Handle user status changes
-        this.socket.on('user_status_change', (data) => {
-          this.statusHandlers.forEach(handler => handler(data));
+        this.socket.on("user_status_change", (data) => {
+          this.statusHandlers.forEach((handler) => handler(data));
         });
-
       } catch (error) {
-        console.error('WebSocket setup error:', error);
+        console.error("WebSocket setup error:", error);
         this.connectionPromise = null;
         reject(error);
       }
@@ -89,6 +107,7 @@ class WebSocketService {
       this.socket.disconnect();
       this.socket = null;
       this.connectionPromise = null;
+      clearInterval(this.statusInterval);
     }
   }
 
@@ -96,10 +115,10 @@ class WebSocketService {
   async sendMessage(conversationId, content, replyTo = null) {
     const socket = await this.ensureConnected();
     return new Promise((resolve, reject) => {
-      socket.emit('send_message', {
+      socket.emit("send_message", {
         conversationId,
         content,
-        replyTo
+        replyTo,
       });
       resolve();
     });
@@ -109,7 +128,7 @@ class WebSocketService {
   async joinConversation(conversationId) {
     const socket = await this.ensureConnected();
     return new Promise((resolve) => {
-      socket.emit('join_conversation', conversationId);
+      socket.emit("join_conversation", conversationId);
       resolve();
     });
   }
@@ -117,7 +136,7 @@ class WebSocketService {
   async leaveConversation(conversationId) {
     const socket = await this.ensureConnected();
     return new Promise((resolve) => {
-      socket.emit('leave_conversation', conversationId);
+      socket.emit("leave_conversation", conversationId);
       resolve();
     });
   }
@@ -127,12 +146,12 @@ class WebSocketService {
     const socket = await this.ensureConnected();
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        socket.off('user_status');
-        resolve({ status: 'offline' });
+        socket.off("user_status");
+        resolve({ status: "offline" });
       }, 5000);
 
-      socket.emit('get_user_status', userId);
-      socket.once('user_status', (status) => {
+      socket.emit("get_user_status", userId);
+      socket.once("user_status", (status) => {
         clearTimeout(timeoutId);
         resolve(status);
       });
@@ -144,16 +163,20 @@ class WebSocketService {
     return () => this.statusHandlers.delete(handler);
   }
 
+  offUserStatusChange(handler) {
+    this.statusHandlers.delete(handler);
+  }
+
   // Typing status
   async sendTyping(conversationId, isTyping) {
     const socket = await this.ensureConnected();
-    socket.emit('typing', { conversationId, isTyping });
+    socket.emit("typing", { conversationId, isTyping });
   }
 
   // Mark message as read
   async markMessageAsRead(conversationId, messageId) {
     const socket = await this.ensureConnected();
-    socket.emit('mark_read', { conversationId, messageId });
+    socket.emit("mark_read", { conversationId, messageId });
   }
 
   // Event listeners

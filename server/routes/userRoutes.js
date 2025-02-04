@@ -146,6 +146,30 @@ router.post("/logout", authenticateToken, async (req, res) => {
   }
 });
 
+router.put("/status", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        onlineStatus: req.body.status,
+        lastActive: new Date(),
+        isOnline: req.body.status !== "offline",
+      },
+      { new: true }
+    );
+
+    req.app.get("io").emit("user_status_change", {
+      userId: user._id,
+      status: user.onlineStatus,
+      lastActive: user.lastActive,
+    });
+
+    res.json({ status: user.onlineStatus });
+  } catch (error) {
+    res.status(500).json({ error: "Status update failed" });
+  }
+});
+
 // Get user status
 
 router.get("/:userId/status", async (req, res) => {

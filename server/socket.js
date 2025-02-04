@@ -27,61 +27,116 @@ const setupSocket = (io) => {
     }
   });
 
-  io.on('connection', (socket) => {
-    console.log('New client connected');
+  io.on("connection", async (socket) => {
+    console.log("New client connected");
 
-    socket.on('login', (userId) => {
-      console.log('User logged in:', userId);
+    await User.findByIdAndUpdate(socket.userId, {
+      isOnline: true,
+      lastActive: new Date(),
+      onlineStatus: "online",
+    })
+      .exec()
+      .then((user) => {
+        onlineUsers[socket.userId] = true;
+        userSockets[socket.userId] = socket.id;
+        io.emit("user_status_change", {
+          userId: socket.userId,
+          status: "online",
+          lastActive: new Date(),
+        });
+      });
+
+    socket.on("login", (userId) => {
+      console.log("User logged in:", userId);
       onlineUsers[userId] = true;
       userSockets[userId] = socket.id;
-      
+
       // Join user's room
       socket.join(userId);
-      io.emit('userOnline', userId);
+      io.emit("userOnline", userId);
     });
 
-    socket.on('joinConversation', (conversationId) => {
-      console.log(`User ${socket.userId} joining conversation:`, conversationId);
+    socket.on("joinConversation", (conversationId) => {
+      console.log(
+        `User ${socket.userId} joining conversation:`,
+        conversationId
+      );
       socket.join(conversationId);
     });
 
-    socket.on('leaveConversation', (conversationId) => {
-      console.log(`User ${socket.userId} leaving conversation:`, conversationId);
+    socket.on("leaveConversation", (conversationId) => {
+      console.log(
+        `User ${socket.userId} leaving conversation:`,
+        conversationId
+      );
       socket.leave(conversationId);
     });
 
-    socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.userId);
+    socket.on("disconnect", async () => {
+      console.log("Client disconnected:", socket.userId);
       if (socket.userId) {
+        await User.findByIdAndUpdate(socket.userId, {
+          isOnline: false,
+          onlineStatus: "offline",
+          lastActive: new Date(),
+        });
+
+        io.emit("user_status_change", {
+          userId: socket.userId,
+          status: "offlins",
+          lastActive: new Date(),
+        });
+
         delete onlineUsers[socket.userId];
         delete userSockets[socket.userId];
-        io.emit('userOffline', socket.userId);
       }
     });
 
-    socket.on('getOnlineUsers', () => {
-      socket.emit('onlineUsers', Object.keys(onlineUsers));
+    socket.on("getOnlineUsers", () => {
+      socket.emit("onlineUsers", Object.keys(onlineUsers));
+    });
+
+    socket.on("update_status", async ({ status }) => {
+      try {
+        const user = await User.findByIdAndUpdate(
+          socket.userId,
+          {
+            onlineStatus: status,
+            lastActive: new Date(),
+            isOnline: status !== "offline",
+          },
+          { new: true }
+        );
+
+        io.emit("user_status_change", {
+          userId: user._id,
+          status: user.onlineStatus,
+          lastActive: user.lastActive,
+        });
+      } catch (error) {
+        console.error("status update error: ", error);
+      }
     });
 
     // Handle new message
     socket.on("send_message", async (data) => {
       try {
         const { conversationId, content, replyTo } = data;
-        
+
         // Create and save the message
         const message = new Message({
           conversation: conversationId,
           sender: socket.userId,
           content,
           replyTo,
-          readBy: [socket.userId]
+          readBy: [socket.userId],
         });
         await message.save();
 
         // Update conversation's last message
         await Conversation.findByIdAndUpdate(conversationId, {
           lastMessage: message._id,
-          $inc: { messageCount: 1 }
+          $inc: { messageCount: 1 },
         });
 
         // Populate message with sender details
@@ -92,13 +147,12 @@ const setupSocket = (io) => {
         // Emit to all users in the conversation
         io.to(conversationId).emit("new_message", {
           message: populatedMessage,
-          conversationId
+          conversationId,
         });
-
       } catch (error) {
         console.error("Error sending message:", error);
         socket.emit("message_error", {
-          error: "Failed to send message"
+          error: "Failed to send message",
         });
       }
     });
@@ -108,7 +162,7 @@ const setupSocket = (io) => {
       socket.to(conversationId).emit("user_typing", {
         userId: socket.userId,
         username: socket.username,
-        isTyping
+        isTyping,
       });
     });
 
@@ -116,12 +170,12 @@ const setupSocket = (io) => {
     socket.on("mark_read", async ({ conversationId, messageId }) => {
       try {
         await Message.findByIdAndUpdate(messageId, {
-          $addToSet: { readBy: socket.userId }
+          $addToSet: { readBy: socket.userId },
         });
 
         socket.to(conversationId).emit("message_read", {
           messageId,
-          userId: socket.userId
+          userId: socket.userId,
         });
       } catch (error) {
         console.error("Error marking message as read:", error);

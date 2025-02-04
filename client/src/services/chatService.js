@@ -21,11 +21,11 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     // Log request for debugging
-    console.log('Making request:', {
+    console.log("Making request:", {
       url: config.url,
       method: config.method,
       data: config.data,
-      headers: config.headers
+      headers: config.headers,
     });
     return config;
   },
@@ -38,7 +38,7 @@ api.interceptors.request.use(
 // Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => {
-    console.log('Response received:', response.data);
+    console.log("Response received:", response.data);
     return response;
   },
   (error) => {
@@ -50,7 +50,9 @@ api.interceptors.response.use(
     } else if (error.request) {
       // Request was made but no response
       console.error("Network error:", error.request);
-      return Promise.reject({ message: "Network error - please check your connection" });
+      return Promise.reject({
+        message: "Network error - please check your connection",
+      });
     } else {
       // Something else happened
       console.error("Error:", error.message);
@@ -69,7 +71,7 @@ const chatService = {
         data.sessionId = data.sessionId.toUpperCase();
       }
       const response = await api.post("/auth/login", data);
-      console.log('Login response:', response.data);
+      console.log("Login response:", response.data);
       if (response.data.token) {
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("userId", response.data.user._id);
@@ -118,7 +120,7 @@ const chatService = {
       const response = await api.get(`/messages/${conversationId}`);
       return {
         data: response.data.messages || [],
-        status: response.status
+        status: response.status,
       };
     } catch (error) {
       console.error("Error getting messages:", error);
@@ -129,10 +131,12 @@ const chatService = {
   // Send a new message
   sendMessage: async (conversationId, content) => {
     try {
-      const response = await api.post(`/messages/${conversationId}`, { content });
+      const response = await api.post(`/messages/${conversationId}`, {
+        content,
+      });
       return {
         data: response.data,
-        status: response.status
+        status: response.status,
       };
     } catch (error) {
       console.error("Error sending message:", error);
@@ -179,6 +183,16 @@ const chatService = {
       const response = await api.get(`/users/${userId}/status`);
       return response.data;
     } catch (error) {
+      throw error;
+    }
+  },
+
+  updateUserStatus: async (status) => {
+    try {
+      const response = await api.put("/users/status", { status });
+      return response.data;
+    } catch (error) {
+      console.error("Status update error:", error);
       throw error;
     }
   },

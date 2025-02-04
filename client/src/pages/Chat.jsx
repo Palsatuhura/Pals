@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Typography, CircularProgress, IconButton, useMediaQuery, useTheme } from "@mui/material";
+import {
+  Box,
+  Typography,
+  CircularProgress,
+  IconButton,
+  useMediaQuery,
+  useTheme,
+} from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ChatSidebar from "../components/ChatSidebar";
 import ChatMain from "../components/ChatMain";
 import chatService from "../services/chatService";
 import { showNotification } from "../utils/notificationUtils";
 import { io } from "socket.io-client";
-import { styled } from '@mui/material/styles';
+import { styled } from "@mui/material/styles";
 
 const ChatContainer = styled(Box)(({ theme }) => ({
   display: "flex",
@@ -16,13 +23,13 @@ const ChatContainer = styled(Box)(({ theme }) => ({
   position: "relative",
   overflow: "hidden",
   backgroundColor: theme.palette.background.default,
-  [theme.breakpoints.down('md')]: {
+  [theme.breakpoints.down("md")]: {
     flexDirection: "column",
-  }
+  },
 }));
 
 const SidebarContainer = styled(Box, {
-  shouldForwardProp: (prop) => !['isMobile', 'showSidebar'].includes(prop)
+  shouldForwardProp: (prop) => !["isMobile", "showSidebar"].includes(prop),
 })(({ theme, isMobile, showSidebar }) => ({
   width: "310px",
   height: "100%",
@@ -35,31 +42,31 @@ const SidebarContainer = styled(Box, {
   zIndex: 2,
   transition: "transform 0.3s ease-in-out",
   transform: isMobile && !showSidebar ? "translateX(-100%)" : "translateX(0)",
-  [theme.breakpoints.down('md')]: {
-    width: "100%"
-  }
+  [theme.breakpoints.down("md")]: {
+    width: "100%",
+  },
 }));
 
 const MainContainer = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'isMobile'
+  shouldForwardProp: (prop) => prop !== "isMobile",
 })(({ theme, isMobile }) => ({
   flex: 1,
   height: "100%",
   position: "relative",
-  [theme.breakpoints.down('md')]: {
+  [theme.breakpoints.down("md")]: {
     width: "100%",
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    zIndex: 1
-  }
+    zIndex: 1,
+  },
 }));
 
 const Chat = () => {
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [showSidebar, setShowSidebar] = useState(!isMobile);
   const [conversationsList, setConversationsList] = useState([]);
   const [currentConversation, setCurrentConversation] = useState(null);
@@ -69,6 +76,22 @@ const Chat = () => {
   const [error, setError] = useState(null);
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState({});
+
+  // Handle online users updates as needed
+  useEffect(() => {
+    if (socket) {
+      socket.on("online_users", (data) => {
+        console.log("Received online users:", data);
+        setOnlineUsers(data);
+      });
+
+      return () => {
+        socket.off("online_users");
+      };
+    }
+  }, [socket]);
 
   // Auth check
   useEffect(() => {
@@ -88,7 +111,7 @@ const Chat = () => {
       try {
         const user = JSON.parse(userData);
         console.log("Auth check - parsed user:", user);
-        
+
         if (!user?._id) {
           throw new Error("Invalid user data");
         }
@@ -115,12 +138,12 @@ const Chat = () => {
       try {
         socketInstance = io(import.meta.env.VITE_WS_URL, {
           withCredentials: true,
-          transports: ['websocket'],
+          transports: ["websocket"],
           auth: { token },
           reconnection: true,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
-          reconnectionAttempts: 5
+          reconnectionAttempts: 5,
         });
 
         socketInstance.on("connect", () => {
@@ -139,7 +162,7 @@ const Chat = () => {
           setIsConnected(false);
           showNotification({
             message: "Connection error. Retrying...",
-            severity: "warning"
+            severity: "warning",
           });
         });
 
@@ -148,7 +171,7 @@ const Chat = () => {
         console.error("Socket initialization error:", error);
         showNotification({
           message: "Failed to establish connection",
-          severity: "error"
+          severity: "error",
         });
       }
     };
@@ -167,7 +190,7 @@ const Chat = () => {
   useEffect(() => {
     const loadConversations = async () => {
       if (!user?._id) return;
-      
+
       try {
         setLoading(true);
         const response = await chatService.getConversations();
@@ -176,10 +199,10 @@ const Chat = () => {
         if (Array.isArray(response?.data)) {
           const conversationsWithFriends = response.data.map((conv) => {
             const participants = conv.participants || [];
-            const friend = participants.find(p => p._id !== user._id) || {};
+            const friend = participants.find((p) => p._id !== user._id) || {};
             return {
               ...conv,
-              friend
+              friend,
             };
           });
 
@@ -187,14 +210,14 @@ const Chat = () => {
 
           // Initialize online status for all users
           const userIds = new Set();
-          conversationsWithFriends.forEach(conv => {
+          conversationsWithFriends.forEach((conv) => {
             if (conv.friend?._id) {
               userIds.add(conv.friend._id);
             }
           });
 
           const initialStatuses = {};
-          userIds.forEach(id => {
+          userIds.forEach((id) => {
             initialStatuses[id] = false;
           });
           setUserStatuses(initialStatuses);
@@ -203,7 +226,7 @@ const Chat = () => {
         console.error("Error loading conversations:", error);
         showNotification({
           message: "Failed to load conversations",
-          severity: "error"
+          severity: "error",
         });
       } finally {
         setLoading(false);
@@ -218,20 +241,20 @@ const Chat = () => {
     if (!socket || !isConnected) return;
 
     socket.on("user_status_change", ({ userId, status }) => {
-      setUserStatuses(prev => ({
+      setUserStatuses((prev) => ({
         ...prev,
-        [userId]: status === "online"
+        [userId]: status === "online",
       }));
     });
 
     socket.on("new_message", (message) => {
       // Update conversations list with new message
-      setConversationsList(prev => {
-        return prev.map(conv => {
+      setConversationsList((prev) => {
+        return prev.map((conv) => {
           if (conv._id === message.conversationId) {
             return {
               ...conv,
-              lastMessage: message
+              lastMessage: message,
             };
           }
           return conv;
@@ -247,10 +270,9 @@ const Chat = () => {
 
   // Toggle sidebar on mobile
   const toggleSidebar = () => {
-    setShowSidebar(prev => !prev);
+    setShowSidebar((prev) => !prev);
   };
 
-  // Handle conversation selection
   const handleConversationSelect = (conversation) => {
     setCurrentConversation(conversation);
     if (isMobile) {
@@ -266,7 +288,7 @@ const Chat = () => {
           justifyContent: "center",
           alignItems: "center",
           height: "100vh",
-          backgroundColor: theme.palette.background.default
+          backgroundColor: theme.palette.background.default,
         }}
       >
         <CircularProgress />
@@ -281,36 +303,27 @@ const Chat = () => {
           conversations={conversationsList}
           selectedConversation={currentConversation}
           onConversationSelect={handleConversationSelect}
-          onlineUsers={userStatuses}
-          loading={loading}
+          userStatuses={userStatuses}
           user={user}
+          onlineUsers={onlineUsers}
         />
       </SidebarContainer>
-      
       <MainContainer isMobile={isMobile}>
-        {currentConversation ? (
-          <ChatMain
-            conversation={currentConversation}
-            socket={socket}
-            onlineUsers={userStatuses}
-            isConnected={isConnected}
-            user={user}
-            onBackClick={isMobile ? toggleSidebar : undefined}
-          />
-        ) : (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: "100%",
-              backgroundColor: theme.palette.background.default,
-              color: theme.palette.text.secondary
-            }}
+        {isMobile && currentConversation && (
+          <IconButton
+            onClick={toggleSidebar}
+            sx={{ position: "absolute", top: 8, left: 8, zIndex: 3 }}
           >
-            <Typography variant="h6">Select a conversation to start chatting</Typography>
-          </Box>
+            <ArrowBackIcon />
+          </IconButton>
         )}
+        <ChatMain
+          conversation={currentConversation}
+          socket={socket}
+          user={user}
+          onlineUsers={onlineUsers}
+          isConnected={isConnected}
+        />
       </MainContainer>
     </ChatContainer>
   );
