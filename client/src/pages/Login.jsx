@@ -80,6 +80,11 @@ const Login = () => {
     return regex.test(value);
   };
 
+  const validateSessionId = (value) => {
+    const regex = /^[A-Z]{2}-[A-Z0-9]{4}-[A-Z0-9]{5}$/;
+    return regex.test(value);
+  };
+
   const handleGetStarted = () => {
     setShowSessionIdInput(true);
     setIsSignup(false); // Show login view first
@@ -99,6 +104,11 @@ const Login = () => {
   const handleSessionIdChange = (e) => {
     const formatted = formatSessionId(e.target.value);
     setSessionId(formatted);
+    if (formatted && !validateSessionId(formatted)) {
+      setError("Invalid session ID");
+    } else {
+      setError("");
+    }
   };
 
   const handleSubmit = async (e) => {

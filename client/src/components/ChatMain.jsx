@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+  memo,
+  useCallback,
+} from "react";
 import { Box, TextField, IconButton, Typography, Paper } from "@mui/material";
 import CircularProgress from "@mui/material/CircularProgress";
 import SendIcon from "@mui/icons-material/Send";
@@ -10,11 +17,13 @@ import { styled } from "@mui/material/styles";
 import { format } from "date-fns";
 import { formatUsername, generateAvatarColor } from "../utils/formatUsername";
 
-const StyledChatMain = styled(Box)({
+const MemoizedMessageBubble = memo(MessageBubble);
+
+const StyledChatMain = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   height: "100vh",
-  backgroundColor: "#0F1620",
+  backgroundColor: theme.palette.background.chat,
   flex: 1,
   position: "fixed",
   top: 0,
@@ -24,35 +33,39 @@ const StyledChatMain = styled(Box)({
   padding: 0,
   width: "calc(100vw - 310px)",
   marginLeft: "310px",
-});
+}));
 
 const ChatHeader = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  padding: "20px",
-  borderBottom: "2px solid #1E2C3A",
-  backgroundColor: "#17212B",
+  padding: "10px 16px",
+  borderBottom: `1px solid ${theme.palette.background.divider}`,
+  backgroundColor: theme.palette.background.paper,
   justifyContent: "space-between",
+  minHeight: "59px",
 }));
 
 const ChatMessages = styled(Box)(({ theme }) => ({
   flex: 1,
   overflowY: "auto",
   padding: "20px 0",
-  backgroundColor: "#0F1620",
+  backgroundColor: theme.palette.background.chat,
+  backgroundImage: "url('/chat-bg.png')",
+  backgroundSize: "cover",
+  backgroundPosition: "center",
   "&::-webkit-scrollbar": {
     width: "6px",
-    backgroundColor: "rgba(0, 0, 0, 0.1)",
+    backgroundColor: "transparent",
   },
   "&::-webkit-scrollbar-track": {
-    background: "#17212B",
+    background: "transparent",
     borderRadius: "3px",
   },
   "&::-webkit-scrollbar-thumb": {
-    background: "#2B5278",
+    background: theme.palette.background.hover,
     borderRadius: "3px",
     "&:hover": {
-      background: "#3A6A9A",
+      background: theme.palette.background.selected,
     },
   },
 }));
@@ -60,33 +73,39 @@ const ChatMessages = styled(Box)(({ theme }) => ({
 const ChatInput = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  padding: "16px 20px",
-  gap: "12px",
-  borderTop: "2px solid #1E2C3A",
-  backgroundColor: "#17212B",
+  padding: "5px 16px",
+  gap: "8px",
+  backgroundColor: theme.palette.background.paper,
+  minHeight: "62px",
 }));
 
-const StyledTextField = styled(TextField)({
+const StyledTextField = styled(TextField)(({ theme }) => ({
   flex: 1,
   "& .MuiOutlinedInput-root": {
-    backgroundColor: "#242F3D",
-    color: "#fff",
+    backgroundColor: theme.palette.background.input,
+    color: theme.palette.text.primary,
     borderRadius: "8px",
-    "&:hover .MuiOutlinedInput-notchedOutline": {
-      borderColor: "#2B5278",
+    padding: "9px 12px",
+    "&:hover": {
+      backgroundColor: theme.palette.background.input,
     },
-    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-      borderColor: "#2B5278",
+    "&.Mui-focused": {
+      backgroundColor: theme.palette.background.input,
+    },
+    "& fieldset": {
+      border: "none",
     },
   },
-  "& .MuiOutlinedInput-notchedOutline": {
-    borderColor: "transparent",
+  "& .MuiInputBase-input": {
+    fontSize: "15px",
+    lineHeight: "20px",
+    padding: "9px 12px",
+    "&::placeholder": {
+      color: theme.palette.text.secondary,
+      opacity: 1,
+    },
   },
-  "& .MuiInputBase-input::placeholder": {
-    color: "#6C7883",
-    opacity: 1,
-  },
-});
+}));
 
 const ChatMain = ({ selectedConversation }) => {
   const [messages, setMessages] = useState([]);
@@ -94,10 +113,45 @@ const ChatMain = ({ selectedConversation }) => {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const socket = useContext(SocketContext);
+  // Add pagination for message history
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  const scrollToBottom = () => {
+  const loadMoreMessages = useCallback(async () => {
+    if (!hasMore || loading) return;
+
+    setLoading(true);
+    try {
+      const response = await chatService.getMessages(
+        selectedConversation._id,
+        page
+      );
+
+      if (response.data.length === 0) {
+        setHasMore(false);
+      } else {
+        setMessages((prev) => [...response.data.reverse(), ...prev]);
+        setPage((prev) => prev + 1);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [page, hasMore, selectedConversation?._id]);
+
+  // Add scroll detection
+  const handleScroll = useCallback(
+    (e) => {
+      const { scrollTop } = e.target;
+      if (scrollTop < 100 && hasMore) {
+        loadMoreMessages();
+      }
+    },
+    [hasMore, loadMoreMessages]
+  );
+
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -185,12 +239,22 @@ const ChatMain = ({ selectedConversation }) => {
   if (!selectedConversation) {
     return (
       <StyledChatMain>
-        <Typography
-          variant="h6"
-          sx={{ p: 3, textAlign: "center", color: "#6C7883" }}
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100%",
+          }}
         >
-          Select a conversation to start chatting
-        </Typography>
+          <Typography
+            variant="h6"
+            sx={{ p: 3, textAlign: "center", color: "#fff" }}
+          >
+            Select a conversation to start chatting
+          </Typography>
+        </Box>
       </StyledChatMain>
     );
   }
@@ -246,7 +310,7 @@ const ChatMain = ({ selectedConversation }) => {
         </Box>
       </ChatHeader>
 
-      <ChatMessages>
+      <ChatMessages onScroll={handleScroll}>
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
             <CircularProgress />
