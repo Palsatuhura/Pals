@@ -1,18 +1,17 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
+import { format } from "date-fns";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
-import { format, isValid } from "date-fns";
 
 const MessageContainer = styled(Box, {
   shouldForwardProp: (prop) => prop !== "isOwn"
 })(({ theme, isOwn }) => ({
   display: "flex",
   justifyContent: isOwn ? "flex-end" : "flex-start",
-  marginBottom: "2px",
-  padding: "0 6%",
+  marginBottom: "8px",
+  padding: "0 16px",
   position: "relative",
-  zIndex: 1,
 }));
 
 const MessageContent = styled(Box, {
@@ -20,11 +19,15 @@ const MessageContent = styled(Box, {
 })(({ theme, isOwn }) => ({
   maxWidth: "65%",
   minWidth: "100px",
-  position: "relative",
   padding: "6px 7px 8px 9px",
   borderRadius: "7.5px",
-  backgroundColor: isOwn ? theme.palette.primary.main : theme.palette.background.paper,
-  boxShadow: theme.shadows[1],
+  position: "relative",
+  backgroundColor: isOwn
+    ? theme.palette.primary.main
+    : theme.palette.background.paper,
+  color: isOwn
+    ? theme.palette.primary.contrastText
+    : theme.palette.text.primary,
   "&::before": {
     content: '""',
     position: "absolute",
@@ -34,73 +37,60 @@ const MessageContent = styled(Box, {
     height: 0,
     borderStyle: "solid",
     borderWidth: isOwn ? "0 8px 8px 0" : "0 0 8px 8px",
-    borderColor: `transparent ${isOwn ? theme.palette.primary.main : theme.palette.background.paper} transparent transparent`,
-    transform: isOwn ? "none" : "scaleX(-1)",
+    borderColor: isOwn
+      ? `transparent ${theme.palette.primary.main} transparent transparent`
+      : `transparent transparent transparent ${theme.palette.background.paper}`,
   },
 }));
 
-const StyledTypography = styled(Typography, {
-  shouldForwardProp: (prop) => prop !== "isOwn"
-})(({ theme, isOwn }) => ({
-  color: isOwn ? "#E9EDEF" : theme.palette.text.primary,
+const MessageText = styled(Typography)({
   fontSize: "14.2px",
   lineHeight: "19px",
   wordBreak: "break-word",
-}));
+  whiteSpace: "pre-wrap",
+  textAlign: "left",
+});
 
-const MessageMeta = styled(Box)({
+const StyledTimeStamp = styled('div')(({ theme, isOwn }) => ({
+  fontSize: "11px",
+  lineHeight: "15px",
+  marginLeft: "4px",
+  float: "right",
+  marginTop: "4px",
+  color: isOwn ? "rgba(255, 255, 255, 0.6)" : theme.palette.text.secondary,
   display: "flex",
   alignItems: "center",
   gap: "4px",
-  position: "relative",
-  float: "right",
-  marginLeft: "8px",
-  marginBottom: "-5px",
-  marginTop: "4px",
-});
-
-const TimeTypography = styled(Typography, {
-  shouldForwardProp: (prop) => prop !== "isOwn"
-})(({ theme, isOwn }) => ({
-  fontSize: "11px",
-  lineHeight: "15px",
-  color: isOwn ? "rgba(233, 237, 239, 0.6)" : theme.palette.text.secondary,
-  marginLeft: "4px",
 }));
 
-const ReadStatusIcon = ({ isRead }) => (
-  <DoneAllIcon 
-    sx={{ 
-      fontSize: "18px",
-      color: isRead ? "#53BDEB" : "rgba(233, 237, 239, 0.6)",
-    }} 
-  />
-);
-
-const formatMessageTime = (timestamp) => {
-  try {
-    const date = timestamp ? new Date(timestamp) : new Date();
-    return isValid(date) ? format(date, "HH:mm") : "Invalid Date";
-  } catch (error) {
-    console.error("Error formatting date:", error);
-    return "Invalid Date";
-  }
-};
-
 const MessageBubble = ({ message, isOwn }) => {
-  const formattedTime = formatMessageTime(message?.timestamp || message?.createdAt);
+  const formatMessageTime = (timestamp) => {
+    try {
+      return format(new Date(timestamp), "HH:mm");
+    } catch (error) {
+      console.error("Error formatting timestamp:", error);
+      return "";
+    }
+  };
 
   return (
     <MessageContainer isOwn={isOwn}>
       <MessageContent isOwn={isOwn}>
-        <StyledTypography isOwn={isOwn}>{message.content}</StyledTypography>
-        <MessageMeta>
-          <TimeTypography isOwn={isOwn}>{formattedTime}</TimeTypography>
-          {isOwn && <ReadStatusIcon isRead={message.isRead} />}
-        </MessageMeta>
+        <MessageText>{message.content}</MessageText>
+        <StyledTimeStamp isOwn={isOwn}>
+          {formatMessageTime(message.createdAt)}
+          {isOwn && (
+            <DoneAllIcon
+              sx={{
+                fontSize: 14,
+                color: message.isRead ? "#53bdeb" : "inherit",
+              }}
+            />
+          )}
+        </StyledTimeStamp>
       </MessageContent>
     </MessageContainer>
   );
 };
 
-export default MessageBubble;
+export default React.memo(MessageBubble);

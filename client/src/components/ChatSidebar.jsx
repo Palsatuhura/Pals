@@ -20,14 +20,20 @@ import {
   TextField,
   Chip,
   InputAdornment,
+  Menu,
+  MenuItem,
+  Divider,
 } from "@mui/material";
-import { styled } from "@mui/material/styles";
+import { styled, useTheme } from "@mui/material/styles";
 import {
   Add as AddIcon,
   PersonAdd as PersonAddIcon,
   Logout as LogoutIcon,
 } from "@mui/icons-material";
 import SearchIcon from "@mui/icons-material/Search";
+import SettingsIcon from "@mui/icons-material/Settings";
+import PersonIcon from "@mui/icons-material/Person";
+import EditIcon from "@mui/icons-material/Edit";
 import NewConversationDialog from "./NewConversationDialog";
 import { formatDistanceToNow } from "date-fns";
 import chatService from "../services/chatService";
@@ -35,35 +41,76 @@ import websocketService from "../services/websocketService";
 import { formatLastSeen } from "../utils/timeUtils";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { generateAvatarColor } from "../utils/formatUsername";
+import { format } from "date-fns";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { showNotification } from "../utils/notificationUtils";
 
-const StyledSidebar = styled(Box)({
+const StyledSidebar = styled(Box)(({ theme }) => ({
   width: "310px",
-  borderRight: "1px solid #0f1620",
+  height: "100%",
   display: "flex",
   flexDirection: "column",
-  overflow: "hidden",
-});
+  backgroundColor: theme.palette.background.paper,
+  borderRight: `1px solid ${theme.palette.divider}`,
+}));
 
-const SearchBar = styled(Box)({
-  padding: "15px",
+const Header = styled(Box)(({ theme }) => ({
+  padding: "8px 16px",
+  borderBottom: `1px solid ${theme.palette.divider}`,
+  backgroundColor: theme.palette.background.paper,
   display: "flex",
   alignItems: "center",
-  backgroundColor: "#242f3d",
-  borderBottom: "1px solid #0f1620",
+  minHeight: "59px",
+  position: "relative",
+  zIndex: 1,
+  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+}));
+
+const UserContainer = styled(Box)({
+  display: "flex",
+  alignItems: "center",
+  flex: 1,
 });
 
-const SearchInput = styled("input")({
-  flex: 1,
-  backgroundColor: "#1c2733",
-  border: "none",
-  borderRadius: "20px",
-  padding: "8px 15px 8px 35px",
-  color: "#fff",
-  outline: "none",
-  "&::placeholder": {
-    color: "#6c7883",
+const StyledAvatar = styled(Avatar)(({ theme }) => ({
+  width: 40,
+  height: 40,
+  backgroundColor: theme.palette.primary.main,
+  fontSize: "16px",
+  fontWeight: 500,
+  cursor: "pointer",
+  transition: "transform 0.2s ease",
+  "&:hover": {
+    transform: "scale(1.05)",
+  },
+}));
+
+const UserInfo = styled(Box)({
+  minWidth: 0,
+  marginLeft: "8px",
+  cursor: "pointer",
+  "&:hover": {
+    opacity: 0.8,
   },
 });
+
+const HeaderIconButton = styled(IconButton)(({ theme }) => ({
+  color: theme.palette.text.secondary,
+  padding: "8px",
+  transition: "all 0.2s ease",
+  "&:hover": {
+    backgroundColor: theme.palette.action.hover,
+    color: theme.palette.primary.main,
+  },
+}));
+
+const SearchContainer = styled(Box)(({ theme }) => ({
+  padding: "8px 16px",
+  backgroundColor: theme.palette.background.paper,
+  borderBottom: `1px solid ${theme.palette.divider}`,
+}));
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
   "& .MuiBadge-badge": {
@@ -175,8 +222,9 @@ const ConversationItem = ({
   onlineUsers,
   userId,
 }) => {
-  const friend = getFriend(conversation, userId);
-  const isOnline = friend && onlineUsers[friend._id];
+  const theme = useTheme();
+  const friend = conversation.friend || {};
+  const isOnline = onlineUsers[friend._id];
 
   return (
     <ListItem
@@ -184,86 +232,92 @@ const ConversationItem = ({
       selected={isSelected}
       onClick={onClick}
       sx={{
-        display: "flex",
-        alignItems: "center",
-        padding: "12px 16px",
-        borderRadius: "8px",
-        marginBottom: "4px",
-        backgroundColor: isSelected ? "#2b5278" : "transparent",
-        "&:hover": {
-          backgroundColor: isSelected ? "#2b5278" : "#182533",
+        px: 2,
+        py: 1,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        "&.Mui-selected": {
+          backgroundColor: theme.palette.action.selected,
+          "&:hover": {
+            backgroundColor: theme.palette.action.selected,
+          },
         },
       }}
     >
-      <Badge
-        overlap="circular"
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        variant="dot"
-        sx={{
-          "& .MuiBadge-badge": {
-            backgroundColor: isOnline ? "#44b700" : "#6c7883",
-            color: isOnline ? "#44b700" : "#6c7883",
-            boxShadow: `0 0 0 2px #17212b`,
-            "&::after": {
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              borderRadius: "50%",
-              animation: isOnline ? "ripple 1.2s infinite ease-in-out" : "none",
-              border: "1px solid currentColor",
-              content: '""',
-            },
-          },
-          "@keyframes ripple": {
-            "0%": {
-              transform: "scale(.8)",
-              opacity: 1,
-            },
-            "100%": {
-              transform: "scale(2.4)",
-              opacity: 0,
-            },
-          },
-        }}
-      >
-        <Avatar
+      <ListItemAvatar>
+        <StyledAvatar
+          src={friend.avatar}
           sx={{
-            bgcolor: stringToColor(friend?.username || ""),
-            width: 40,
-            height: 40,
-            marginRight: 2,
+            bgcolor: generateAvatarColor(friend.username || ""),
+            width: 48,
+            height: 48,
           }}
         >
-          {friend?.username?.[0]?.toUpperCase()}
-        </Avatar>
-      </Badge>
-      <Box sx={{ ml: 2, flex: 1, overflow: "hidden" }}>
-        <Typography
-          variant="subtitle1"
-          sx={{
-            color: "#fff",
-            fontWeight: "500",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {formatUsername(friend?.username || "Unknown User")}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            color: "#6c7883",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {conversation.lastMessage?.content || "No messages yet"}
-        </Typography>
-      </Box>
+          {friend.username?.charAt(0).toUpperCase()}
+        </StyledAvatar>
+      </ListItemAvatar>
+      <ListItemText
+        primary={
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 600,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {friend.username}
+            </Typography>
+            {conversation.lastMessage && (
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", ml: 1, flexShrink: 0 }}
+              >
+                {format(new Date(conversation.lastMessage.createdAt), "h:mm a")}
+              </Typography>
+            )}
+          </Box>
+        }
+        secondary={
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: 0.5,
+            }}
+          >
+            {isOnline ? (
+              <>
+                <Box
+                  component="span"
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    bgcolor: "success.main",
+                    display: "inline-block",
+                  }}
+                />
+                online
+              </>
+            ) : (
+              conversation.lastMessage?.content || "No messages yet"
+            )}
+          </Typography>
+        }
+      />
     </ListItem>
   );
 };
@@ -272,695 +326,167 @@ const ChatSidebar = ({
   conversations,
   selectedConversation,
   onConversationSelect,
-  onNewConversation,
-  loading,
+  onlineUsers,
 }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showNewChat, setShowNewChat] = useState(false);
-  const [addFriendDialogOpen, setAddFriendDialogOpen] = useState(false);
-  const [friendSessionId, setFriendSessionId] = useState("");
-  const [addingFriend, setAddingFriend] = useState(false);
-  const [error, setError] = useState("");
-  const [onlineUsers, setOnlineUsers] = useState({});
-  const [user, setUser] = useState(() => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showNewConversationDialog, setShowNewConversationDialog] =
+    useState(false);
+  const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
+  const [friendUsername, setFriendUsername] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const userId = localStorage.getItem("userId");
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
     try {
-      const userId = localStorage.getItem("userId");
-      const username = localStorage.getItem("username");
-      const sessionId = localStorage.getItem("sessionId");
-
-      if (!userId) return null;
-
-      return {
-        _id: userId,
-        username,
-        sessionId,
-      };
+      await logout();
+      navigate("/");
+      showNotification("Successfully logged out", "success");
     } catch (error) {
-      console.error("Error loading user from localStorage:", error);
-      return null;
+      showNotification("Logout failed, please try again", "error");
     }
-  });
-
-  useEffect(() => {
-    const handleStorageChange = () => {
-      try {
-        const userId = localStorage.getItem("userId");
-        const username = localStorage.getItem("username");
-        const sessionId = localStorage.getItem("sessionId");
-
-        if (!userId) {
-          setUser(null);
-          return;
-        }
-
-        setUser({
-          _id: userId,
-          username,
-          sessionId,
-        });
-      } catch (error) {
-        console.error("Error loading user from localStorage:", error);
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
-
-  const [socket, setSocket] = useState(null);
-  const [conversationsList, setConversations] = useState([]);
-  const [loadingConversations, setLoading] = useState(false);
-
-  useEffect(() => {
-    const initializeSocket = async () => {
-      try {
-        if (!user?._id || !conversations?.length) return;
-
-        await websocketService.connect();
-        const socket = websocketService.getSocket();
-        if (!socket) return;
-
-        const checkAllParticipantsStatus = async () => {
-          const friendIds = conversations
-            .map((conv) => getFriend(conv, user._id)?._id)
-            .filter(Boolean);
-
-          console.log("Checking status for friends:", friendIds);
-
-          const statusPromises = friendIds.map(async (friendId) => {
-            try {
-              const status = await websocketService.getUserStatus(friendId);
-              console.log(`Status for ${friendId}:`, status);
-              return {
-                userId: friendId,
-                isOnline: status?.status === "online",
-              };
-            } catch (error) {
-              console.error(`Error getting status for ${friendId}:`, error);
-              return { userId: friendId, isOnline: false };
-            }
-          });
-
-          const statuses = await Promise.all(statusPromises);
-          const newOnlineUsers = {};
-          statuses.forEach(({ userId, isOnline }) => {
-            newOnlineUsers[userId] = isOnline;
-          });
-
-          console.log("Setting online users:", newOnlineUsers);
-          setOnlineUsers(newOnlineUsers);
-        };
-
-        checkAllParticipantsStatus();
-
-        const handleStatusChange = ({ userId, status }) => {
-          console.log(`Real-time status change for ${userId}:`, status);
-          setOnlineUsers((prev) => ({
-            ...prev,
-            [userId]: status === "online",
-          }));
-        };
-
-        socket.on("connect", () => {
-          console.log("Socket reconnected, checking all statuses");
-          checkAllParticipantsStatus();
-        });
-
-        socket.on("user_status_change", handleStatusChange);
-
-        return () => {
-          socket.off("connect");
-          socket.off("user_status_change", handleStatusChange);
-        };
-      } catch (error) {
-        console.error("Socket initialization error:", error);
-      }
-    };
-
-    initializeSocket();
-  }, [user?._id, conversations]);
-
-  useEffect(() => {
-    if (Array.isArray(conversations)) {
-      setConversations(conversations);
-    }
-  }, [conversations]);
-
-  const handleConversationClick = (conversation) => {
-    console.log("Clicking conversation:", conversation);
-    onConversationSelect(conversation);
   };
 
-  const getLastMessagePreview = (conversation) => {
-    if (!conversation.lastMessage) return "No conversations yet";
-    if (!conversation.lastMessage.content) return "Media message";
-    const content = String(conversation.lastMessage.content);
-    return content.length > 30 ? content.substring(0, 30) + "..." : content;
+  const handleSearchChange = (event) => {
+    setSearchQuery(event.target.value);
   };
 
   const handleAddFriend = async () => {
     try {
       setLoading(true);
-      setError("");
-
-      const response = await chatService.createConversation(friendSessionId);
-
-      if (response && response.data?.conversation) {
-        await websocketService.emit("newConversation", {
-          conversation: response.data.conversation,
-        });
-
-        onNewConversation(response.data.conversation);
-        setAddFriendDialogOpen(false);
-        setFriendSessionId("");
-      }
+      setError(null);
+      const response = await chatService.addFriend(friendUsername);
+      setShowAddFriendDialog(false);
+      setFriendUsername("");
+      toast.success("Friend request sent successfully!");
     } catch (error) {
-      console.error("Error adding friend:", error);
-      setError(error.response?.data?.message || "Failed to add friend");
+      setError(
+        error.response?.data?.message || "Failed to send friend request"
+      );
+      toast.error(
+        error.response?.data?.message || "Failed to send friend request"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      websocketService.disconnect();
-
-      await chatService.logout();
-
-      localStorage.removeItem("token");
-      localStorage.removeItem("userId");
-      localStorage.removeItem("username");
-
-      window.location.href = "/";
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
-
-  useEffect(() => {
-    const fetchOnlineStatus = async () => {
-      try {
-        if (
-          !conversationsList ||
-          !Array.isArray(conversationsList) ||
-          !user?._id
-        ) {
-          return;
-        }
-
-        const userIds = conversationsList
-          .map((conv) => getFriend(conv, user._id)?._id)
-          .filter(Boolean);
-
-        if (userIds.length === 0) {
-          return;
-        }
-
-        const response = await chatService.getUserStatuses(userIds);
-        if (response?.users) {
-          const onlineUserIds = response.users
-            .filter((user) => user.status === "online")
-            .map((user) => user._id);
-
-          setOnlineUsers(
-            onlineUserIds.reduce((acc, id) => ({ ...acc, [id]: true }), {})
-          );
-        }
-      } catch (error) {
-        console.error("Error fetching user statuses:", error);
-        setError("Failed to fetch online status");
-      }
-    };
-
-    if (conversationsList?.length > 0) {
-      fetchOnlineStatus();
-    }
-  }, [conversationsList, user]);
-
-  const loadConversations = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/conversations`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          withCredentials: true,
-        }
-      );
-
-      // Sort conversations by last message timestamp
-      const sortedConversations = response.data.sort((a, b) => {
-        const timestampA = a.lastMessage?.timestamp || a.createdAt;
-        const timestampB = b.lastMessage?.timestamp || b.createdAt;
-        return new Date(timestampB) - new Date(timestampA);
-      });
-
-      setConversations(sortedConversations);
-      setLoading(false);
-    } catch (error) {
-      console.error("Error loading conversations:", error);
-      setError("Failed to load conversations");
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadConversations();
-
-    if (socket) {
-      socket.on("newMessage", (message) => {
-        setConversations((prevConversations) => {
-          const updatedConversations = prevConversations.map((conv) => {
-            if (conv._id === message.conversation) {
-              return {
-                ...conv,
-                lastMessage: message,
-                unreadCount: conv.unreadCount + 1,
-              };
-            }
-            return conv;
-          });
-
-          return updatedConversations.sort((a, b) => {
-            const timeA = a.lastMessage
-              ? new Date(a.lastMessage.createdAt)
-              : new Date(0);
-            const timeB = b.lastMessage
-              ? new Date(b.lastMessage.createdAt)
-              : new Date(0);
-            return timeB - timeA;
-          });
-        });
-      });
-
-      return () => {
-        socket.off("newMessage");
-      };
-    }
-  }, [socket]);
-
-  const formatMessageTime = (date) => {
-    if (!date) return "";
-    return new Date(date)
-      .toLocaleString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      })
-      .toLowerCase();
-  };
-
-  const renderConversations = () => {
-    if (loading) {
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((conversation) => {
+      const friend = conversation.friend || {};
       return (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "100%",
-          }}
-        >
-          <CircularProgress />
-        </Box>
+        friend.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conversation.lastMessage?.content
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase())
       );
-    }
-
-    if (!Array.isArray(conversationsList)) {
-      console.error("Conversations list is not an array:", conversationsList);
-      return null;
-    }
-
-    const filteredConversations = conversationsList.filter((conv) => {
-      if (!conv?.friend?.username) return false;
-      return conv.friend.username
-        .toLowerCase()
-        .includes((searchTerm || "").toLowerCase());
     });
+  }, [conversations, searchQuery]);
 
-    if (filteredConversations.length === 0) {
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "100%",
-            p: 3,
-            textAlign: "center",
-            color: "#6C7883",
-          }}
-        >
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            {searchTerm ? "No conversations found" : "No conversations yet"}
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<PersonAddIcon />}
-            onClick={() => setAddFriendDialogOpen(true)}
-            sx={{
-              bgcolor: "#2B5278",
-              "&:hover": {
-                bgcolor: "#1E2C3A",
-              },
-            }}
-          >
-            Add a Friend
-          </Button>
-        </Box>
-      );
-    }
-
-    return (
-      <List sx={{ p: 0 }}>
-        {filteredConversations.map((conversation) => (
-          <ListItem
-            key={conversation._id}
-            onClick={() => handleConversationClick(conversation)}
-            sx={{
-              cursor: "pointer",
-              bgcolor:
-                selectedConversation?._id === conversation._id
-                  ? "#2B5278"
-                  : "transparent",
-              "&:hover": {
-                bgcolor:
-                  selectedConversation?._id === conversation._id
-                    ? "#2B5278"
-                    : "#1E2C3A",
-              },
-              p: 2,
-            }}
-          >
-            <ListItemAvatar>
-              <Badge
-                overlap="circular"
-                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                variant="dot"
-                sx={{
-                  "& .MuiBadge-badge": {
-                    backgroundColor: onlineUsers[conversation.friend?._id]
-                      ? "#ceed9f"
-                      : "transparent",
-                    boxShadow: onlineUsers[conversation.friend?._id]
-                      ? `0 0 0 2px #17212b, 0 0 0 4px #ceed9f40`
-                      : "none",
-                    width: 14,
-                    height: 14,
-                    borderRadius: "50%",
-                    transition: "all 0.2s ease-in-out",
-                    "&::after": onlineUsers[conversation.friend?._id]
-                      ? {
-                          content: '""',
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          height: "100%",
-                          borderRadius: "50%",
-                          animation: "ripple 1.2s infinite ease-in-out",
-                          border: "2px solid #ceed9f",
-                        }
-                      : {},
-                  },
-                  "@keyframes ripple": {
-                    "0%": {
-                      transform: "scale(.8)",
-                      opacity: 1,
-                    },
-                    "100%": {
-                      transform: "scale(2.4)",
-                      opacity: 0,
-                    },
-                  },
-                }}
-              >
-                <Avatar
-                  sx={{
-                    bgcolor: stringToColor(conversation.friend?.username),
-                    width: 48,
-                    height: 48,
-                  }}
-                >
-                  {conversation.friend?.username?.[0]?.toUpperCase() || "?"}
-                </Avatar>
-              </Badge>
-            </ListItemAvatar>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="subtitle1"
-                  sx={{
-                    color: "#fff",
-                    fontWeight: "500",
-                  }}
-                >
-                  {formatUsername(conversation.friend?.username)}
-                </Typography>
-              }
-              secondary={
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "#6C7883",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {conversation.lastMessage?.content || "No messages yet"}
-                </Typography>
-              }
-            />
-            {conversation.unreadCount?.[user?._id] > 0 && (
-              <Box
-                sx={{
-                  bgcolor: "#2B5278",
-                  color: "#fff",
-                  borderRadius: "50%",
-                  width: 24,
-                  height: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  ml: 1,
-                }}
-              >
-                <Typography variant="caption">
-                  {conversation.unreadCount?.[user?._id]}
-                </Typography>
-              </Box>
-            )}
-          </ListItem>
-        ))}
-      </List>
-    );
-  };
-
-  const renderUserStatus = (userId) => {
-    const status = onlineUsers[userId];
-    if (!status) return null;
-
-    if (status) {
-      return (
-        <Typography variant="caption" color="success.main">
-          online
-        </Typography>
-      );
-    }
-
-    return (
-      <Typography variant="caption" color="text.secondary">
-        {formatLastSeen(status.lastActive)}
-      </Typography>
-    );
-  };
+  const userColor = useMemo(() => {
+    return generateAvatarColor(userId || "");
+  }, [userId]);
 
   return (
-    <Box
-      sx={{
-        width: 310,
-        height: "100vh",
-        bgcolor: "#17212B",
-        borderRight: "1px solid #2B3945",
-        display: "flex",
-        flexDirection: "column",
-        position: "fixed",
-        left: 0,
-        top: 0,
-        zIndex: 1000,
-      }}
-    >
-      {/* Header */}
-      <Box
-        sx={{
-          p: 2,
-          borderBottom: "1px solid #2B3945",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          bgcolor: "#1E2A36",
-        }}
-      >
-        <Typography variant="h6" sx={{ color: "#fff", fontWeight: 600 }}>
-          Chats
+    <StyledSidebar>
+      <Header sx={{ display: "flex", gap: 20 }}>
+        <Typography
+          variant="h2"
+          sx={{
+            fontWeight: 900,
+            fontSize: "20px",
+          }}
+        >
+          Chat
         </Typography>
-        <Box>
-          <IconButton
-            onClick={() => setAddFriendDialogOpen(true)}
-            sx={{
-              color: "#E4E6EB",
-              "&:hover": {
-                bgcolor: "rgba(255, 255, 255, 0.1)",
-              },
-              mr: 1,
-            }}
-          >
-            <PersonAddIcon />
-          </IconButton>
-          <IconButton
-            onClick={() => handleLogout()}
-            sx={{
-              color: "#E4E6EB",
-              "&:hover": {
-                bgcolor: "rgba(255, 255, 255, 0.1)",
-              },
-            }}
-          >
-            <LogoutIcon />
-          </IconButton>
-        </Box>
-      </Box>
 
-      {/* Search */}
-      <Box sx={{ p: 2, borderBottom: "1px solid #2B3945" }}>
+        <Typography sx={{ gap: 1, display: "flex" }}>
+          <HeaderIconButton
+            onClick={() => setShowAddFriendDialog(true)}
+            title="Add Friend"
+          >
+            <PersonAddIcon fontSize="medium" />
+          </HeaderIconButton>
+          <HeaderIconButton onClick={handleLogout}>
+            <LogoutIcon fontSize="medium" />
+          </HeaderIconButton>
+        </Typography>
+      </Header>
+
+      <SearchContainer>
         <TextField
           fullWidth
           size="small"
           placeholder="Search conversations..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{
-            "& .MuiOutlinedInput-root": {
-              bgcolor: "#242F3D",
-              borderRadius: 2,
-              color: "#fff",
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: "#2B5278",
-              },
-              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: "#2B5278",
-              },
-            },
-            "& .MuiOutlinedInput-notchedOutline": {
-              borderColor: "transparent",
-            },
-            "& .MuiInputBase-input::placeholder": {
-              color: "#6C7883",
-              opacity: 1,
-            },
-          }}
+          value={searchQuery}
+          onChange={handleSearchChange}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon sx={{ color: "#6C7883" }} />
+                <SearchIcon />
               </InputAdornment>
             ),
           }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              borderRadius: "20px",
+            },
+          }}
         />
-      </Box>
+      </SearchContainer>
 
-      {/* Conversations List */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: "auto",
-          "&::-webkit-scrollbar": {
-            width: "6px",
-          },
-          "&::-webkit-scrollbar-track": {
-            background: "#17212B",
-          },
-          "&::-webkit-scrollbar-thumb": {
-            background: "#2B5278",
-            borderRadius: "3px",
-          },
-        }}
-      >
-        {renderConversations()}
-      </Box>
+      <List sx={{ flex: 1, overflow: "auto", p: 0 }}>
+        {filteredConversations.map((conversation) => (
+          <ConversationItem
+            key={conversation._id}
+            conversation={conversation}
+            isSelected={selectedConversation?._id === conversation._id}
+            onClick={() => onConversationSelect(conversation)}
+            onlineUsers={onlineUsers}
+            userId={userId}
+          />
+        ))}
+      </List>
 
-      {/* Add Friend Dialog */}
       <Dialog
-        open={addFriendDialogOpen}
-        onClose={() => setAddFriendDialogOpen(false)}
-        PaperProps={{
-          sx: {
-            bgcolor: "#17212b",
-            color: "#E4E6EB",
-          },
-        }}
+        open={showAddFriendDialog}
+        onClose={() => setShowAddFriendDialog(false)}
       >
-        <DialogTitle>Add Friend</DialogTitle>
+        <DialogTitle>Add New Friend</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ color: "#6C7883", mb: 2 }}>
-            Enter your friend's session ID to start a conversation.
+          <DialogContentText>
+            Enter the username of the friend you want to add.
           </DialogContentText>
           <TextField
             autoFocus
             margin="dense"
-            label="Friend's Session ID"
+            label="Friend's Username"
             fullWidth
-            value={friendSessionId}
-            onChange={(e) => setFriendSessionId(e.target.value.toUpperCase())}
+            value={friendUsername}
+            onChange={(e) => setFriendUsername(e.target.value)}
             error={!!error}
             helperText={error}
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                color: "#E4E6EB",
-                "& fieldset": {
-                  borderColor: "#2B5278",
-                },
-                "&:hover fieldset": {
-                  borderColor: "#2B5278",
-                },
-                "&.Mui-focused fieldset": {
-                  borderColor: "#2B5278",
-                },
-              },
-              "& .MuiInputLabel-root": {
-                color: "#6C7883",
-              },
-            }}
           />
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => setAddFriendDialogOpen(false)}
-            sx={{ color: "#6C7883" }}
-          >
-            Cancel
-          </Button>
+          <Button onClick={() => setShowAddFriendDialog(false)}>Cancel</Button>
           <Button
             onClick={handleAddFriend}
-            disabled={addingFriend}
-            sx={{
-              color: "#E4E6EB",
-              "&.Mui-disabled": {
-                color: "#6C7883",
-              },
-            }}
+            disabled={!friendUsername.trim() || loading}
           >
-            {addingFriend ? "Adding..." : "Add Friend"}
+            {loading ? <CircularProgress size={24} /> : "Add Friend"}
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+
+      <NewConversationDialog
+        open={showNewConversationDialog}
+        onClose={() => setShowNewConversationDialog(false)}
+        onNewConversation={onConversationSelect}
+      />
+    </StyledSidebar>
   );
 };
 

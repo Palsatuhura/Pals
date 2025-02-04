@@ -16,12 +16,11 @@ const theme = createTheme({
     background: {
       default: '#111B21',
       paper: '#202C33',
-      sidebar: '#111B21',
-      chat: '#0B141A',
+      chat: '#0b141a',
       hover: '#2A3942',
       selected: '#2A3942',
       input: '#2A3942',
-      divider: '#2A3942'
+      divider: '#222d34'
     },
     text: {
       primary: '#E9EDEF',
@@ -32,7 +31,8 @@ const theme = createTheme({
     action: {
       hover: '#202C33',
       selected: '#2A3942'
-    }
+    },
+    divider: '#222d34'
   },
   typography: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
@@ -68,7 +68,8 @@ const theme = createTheme({
           '&::-webkit-scrollbar-thumb': {
             backgroundColor: '#374045',
             borderRadius: '3px',
-          }
+          },
+          color: '#e9edef'
         }
       }
     },
@@ -137,9 +138,9 @@ const theme = createTheme({
     MuiIconButton: {
       styleOverrides: {
         root: {
-          color: '#8696A0',
+          color: '#aebac1',
           '&:hover': {
-            backgroundColor: 'rgba(134, 150, 160, 0.1)'
+            backgroundColor: 'rgba(134, 150, 160, 0.08)'
           }
         }
       }

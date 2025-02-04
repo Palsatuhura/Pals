@@ -6,9 +6,17 @@ import React, {
   memo,
   useCallback,
 } from "react";
-import { Box, TextField, IconButton, Typography, Paper } from "@mui/material";
+import {
+  Box,
+  TextField,
+  IconButton,
+  Typography,
+  Paper,
+  Avatar,
+} from "@mui/material";
 import CircularProgress from "@mui/material/CircularProgress";
 import SendIcon from "@mui/icons-material/Send";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { showNotification } from "../utils/notificationUtils";
 import chatService from "../services/chatService";
 import { SocketContext } from "../App";
@@ -16,340 +24,345 @@ import MessageBubble from "./MessageBubble";
 import { styled } from "@mui/material/styles";
 import { format } from "date-fns";
 import { formatUsername, generateAvatarColor } from "../utils/formatUsername";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import SearchIcon from "@mui/icons-material/Search";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import { formatDistanceToNow } from "date-fns";
 
 const MemoizedMessageBubble = memo(MessageBubble);
 
-const StyledChatMain = styled(Box)(({ theme }) => ({
+const ChatMainContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
-  height: "100vh",
-  backgroundColor: theme.palette.background.chat,
-  flex: 1,
-  position: "fixed",
-  top: 0,
-  right: 0,
-  bottom: 0,
-  margin: 0,
-  padding: 0,
-  width: "calc(100vw - 310px)",
-  marginLeft: "310px",
+  height: "100%",
+  width: "100%",
+  position: "relative",
+  backgroundColor: theme.palette.background.default,
 }));
 
-const ChatHeader = styled(Box)(({ theme }) => ({
+const Header = styled(Box)(({ theme }) => ({
+  padding: "8px 16px",
+  borderBottom: `1px solid ${theme.palette.divider}`,
+  backgroundColor: theme.palette.background.paper,
   display: "flex",
   alignItems: "center",
-  padding: "10px 16px",
-  borderBottom: `1px solid ${theme.palette.background.divider}`,
-  backgroundColor: theme.palette.background.paper,
-  justifyContent: "space-between",
   minHeight: "59px",
+  position: "relative",
+  zIndex: 1,
+  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
 }));
 
-const ChatMessages = styled(Box)(({ theme }) => ({
+const HeaderIconButton = styled(IconButton)(({ theme }) => ({
+  color: theme.palette.text.secondary,
+  padding: "8px",
+  transition: "all 0.2s ease",
+  "&:hover": {
+    backgroundColor: theme.palette.action.hover,
+    color: theme.palette.primary.main,
+  },
+}));
+
+const AvatarContainer = styled(Box)({
+  display: "flex",
+  alignItems: "center",
+  flex: 1,
+});
+
+const UserInfo = styled(Box)({
+  minWidth: 0,
+  cursor: "pointer",
+  marginLeft: "8px",
+  transition: "opacity 0.2s ease",
+  "&:hover": {
+    opacity: 0.8,
+  },
+});
+
+const UserName = styled(Typography)({
+  fontWeight: 600,
+  fontSize: "16px",
+  lineHeight: "21px",
+  display: "-webkit-box",
+  "-webkit-line-clamp": 1,
+  "-webkit-box-orient": "vertical",
+  overflow: "hidden",
+});
+
+const UserStatus = styled(Typography)(({ theme, isOnline }) => ({
+  fontSize: "13px",
+  lineHeight: "18px",
+  color: isOnline ? theme.palette.success.main : theme.palette.text.secondary,
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+}));
+
+const StyledAvatar = styled(Avatar)(({ theme }) => ({
+  width: 40,
+  height: 40,
+  backgroundColor: theme.palette.primary.main,
+  fontSize: "16px",
+  fontWeight: 500,
+  cursor: "pointer",
+  transition: "transform 0.2s ease",
+  "&:hover": {
+    transform: "scale(1.05)",
+  },
+}));
+
+const OnlineBadge = styled("span")(({ theme }) => ({
+  display: "inline-block",
+  width: "8px",
+  height: "8px",
+  borderRadius: "50%",
+  backgroundColor: theme.palette.success.main,
+  marginRight: "4px",
+  boxShadow: "0 0 0 2px " + theme.palette.background.paper,
+}));
+
+const HeaderActions = styled(Box)(({ theme }) => ({
+  display: "flex",
+  gap: "4px",
+  alignItems: "center",
+  marginLeft: "auto",
+}));
+
+const MessagesContainer = styled(Box)({
   flex: 1,
   overflowY: "auto",
   padding: "20px 0",
-  backgroundColor: theme.palette.background.chat,
-  backgroundImage: "url('/chat-bg.png')",
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-  "&::-webkit-scrollbar": {
-    width: "6px",
-    backgroundColor: "transparent",
-  },
-  "&::-webkit-scrollbar-track": {
-    background: "transparent",
-    borderRadius: "3px",
-  },
-  "&::-webkit-scrollbar-thumb": {
-    background: theme.palette.background.hover,
-    borderRadius: "3px",
-    "&:hover": {
-      background: theme.palette.background.selected,
-    },
-  },
-}));
-
-const ChatInput = styled(Box)(({ theme }) => ({
   display: "flex",
-  alignItems: "center",
-  padding: "5px 16px",
-  gap: "8px",
+  flexDirection: "column",
+});
+
+const InputContainer = styled(Box)(({ theme }) => ({
+  padding: "10px",
+  borderTop: `1px solid ${theme.palette.divider}`,
   backgroundColor: theme.palette.background.paper,
-  minHeight: "62px",
 }));
 
-const StyledTextField = styled(TextField)(({ theme }) => ({
-  flex: 1,
-  "& .MuiOutlinedInput-root": {
-    backgroundColor: theme.palette.background.input,
-    color: theme.palette.text.primary,
-    borderRadius: "8px",
-    padding: "9px 12px",
-    "&:hover": {
-      backgroundColor: theme.palette.background.input,
-    },
-    "&.Mui-focused": {
-      backgroundColor: theme.palette.background.input,
-    },
-    "& fieldset": {
-      border: "none",
-    },
-  },
-  "& .MuiInputBase-input": {
-    fontSize: "15px",
-    lineHeight: "20px",
-    padding: "9px 12px",
-    "&::placeholder": {
-      color: theme.palette.text.secondary,
-      opacity: 1,
-    },
-  },
-}));
-
-const ChatMain = ({ selectedConversation }) => {
+const ChatMain = ({
+  conversation,
+  socket,
+  onlineUsers,
+  isConnected,
+  user,
+  onBackClick,
+}) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef(null);
-  const socket = useContext(SocketContext);
-  // Add pagination for message history
+  const messagesContainerRef = useRef(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const loadMoreMessages = useCallback(async () => {
-    if (!hasMore || loading) return;
-
-    setLoading(true);
-    try {
-      const response = await chatService.getMessages(
-        selectedConversation._id,
-        page
-      );
-
-      if (response.data.length === 0) {
-        setHasMore(false);
-      } else {
-        setMessages((prev) => [...response.data.reverse(), ...prev]);
-        setPage((prev) => prev + 1);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [page, hasMore, selectedConversation?._id]);
-
-  // Add scroll detection
-  const handleScroll = useCallback(
-    (e) => {
-      const { scrollTop } = e.target;
-      if (scrollTop < 100 && hasMore) {
-        loadMoreMessages();
-      }
-    },
-    [hasMore, loadMoreMessages]
-  );
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+  // Reset state when conversation changes
+  useEffect(() => {
+    setMessages([]);
+    setPage(1);
+    setHasMore(true);
+    setNewMessage("");
+  }, [conversation?._id]);
 
   // Load messages when conversation changes
   useEffect(() => {
     const loadMessages = async () => {
-      if (!selectedConversation?._id) {
-        setMessages([]);
-        return;
-      }
+      if (!conversation?._id) return;
 
       setLoading(true);
       try {
-        const response = await chatService.getMessages(
-          selectedConversation._id
-        );
-        // Ensure we have an array of messages
-        const messageArray = Array.isArray(response.data)
-          ? response.data
-          : Array.isArray(response.data.messages)
-          ? response.data.messages
-          : [];
-        setMessages(messageArray);
+        const response = await chatService.getMessages(conversation._id);
+
+        if (Array.isArray(response?.data)) {
+          const processedMessages = response.data.map((msg) => {
+            let senderId = msg.sender;
+            if (typeof msg.sender === "object") {
+              senderId = msg.sender._id || msg.sender.id || msg.sender;
+            }
+            return {
+              ...msg,
+              sender: senderId,
+            };
+          });
+          setMessages(processedMessages);
+        }
         scrollToBottom();
       } catch (error) {
         console.error("Error loading messages:", error);
-        showNotification("Failed to load messages", "error");
-        setMessages([]);
+        showNotification(`Failed to load messages`, "error");
       } finally {
         setLoading(false);
       }
     };
 
     loadMessages();
-  }, [selectedConversation?._id]);
+  }, [conversation?._id, user]);
 
-  // Socket event handlers
+  const scrollToBottom = useCallback(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
+    }
+  }, []);
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !socket || !conversation?._id) return;
+
+    const messageData = {
+      conversationId: conversation._id,
+      content: newMessage.trim(),
+      sender: user._id, // Ensure we're sending the ID, not the whole user object
+    };
+
+    try {
+      socket.emit("send_message", messageData);
+      setNewMessage("");
+      scrollToBottom();
+    } catch (error) {
+      console.error("Error sending message:", error);
+      showNotification(`Failed to send message`, "error");
+    }
+  };
+
+  // Listen for new messages
   useEffect(() => {
-    if (!socket || !selectedConversation?._id) return;
-
-    console.log(
-      "Setting up socket listeners for conversation:",
-      selectedConversation._id
-    );
-
-    // Join conversation room
-    socket.emit("joinConversation", selectedConversation._id);
+    if (!socket || !conversation?._id) return;
 
     const handleNewMessage = (message) => {
-      console.log("Received new message:", message);
-      if (message.conversation === selectedConversation._id) {
+      if (message.conversationId === conversation._id) {
         setMessages((prev) => [...prev, message]);
         scrollToBottom();
       }
     };
 
-    socket.on("newMessage", handleNewMessage);
+    socket.on("new_message", handleNewMessage);
 
     return () => {
-      socket.emit("leaveConversation", selectedConversation._id);
-      socket.off("newMessage", handleNewMessage);
+      socket.off("new_message", handleNewMessage);
     };
-  }, [socket, selectedConversation?._id]);
+  }, [socket, conversation?._id, scrollToBottom]);
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation?._id) return;
-
-    const messageContent = newMessage.trim();
-    setNewMessage("");
-
-    try {
-      const response = await chatService.sendMessage(
-        selectedConversation._id,
-        messageContent
-      );
-      console.log("Message sent:", response.data);
-
-      // Message will be added through socket event
-    } catch (error) {
-      console.error("Error sending message:", error);
-      showNotification("Failed to send message", "error");
-      setNewMessage(messageContent);
-    }
-  };
-
-  if (!selectedConversation) {
+  if (!conversation) {
     return (
-      <StyledChatMain>
-        <Box
-          sx={{
-            flex: 1,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "100%",
-          }}
-        >
-          <Typography
-            variant="h6"
-            sx={{ p: 3, textAlign: "center", color: "#fff" }}
-          >
-            Select a conversation to start chatting
-          </Typography>
-        </Box>
-      </StyledChatMain>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100%",
+          backgroundColor: theme.palette.background.default,
+          color: theme.palette.text.secondary,
+        }}
+      >
+        <Typography variant="h6">
+          Select a conversation to start chatting
+        </Typography>
+      </Box>
     );
   }
 
-  const friendId = selectedConversation.participants.find(
-    (id) => id !== localStorage.getItem("userId")
-  );
-  const isOnline = socket?.onlineUsers?.hasOwnProperty(friendId);
-  const username = selectedConversation.friend?.username || "Unknown User";
-
   return (
-    <StyledChatMain>
-      <ChatHeader>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: "50%",
-              backgroundColor: generateAvatarColor(username[0]),
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              color: "#fff",
-              fontSize: "1.25rem",
-            }}
+    <ChatMainContainer>
+      <Header>
+        {onBackClick && (
+          <HeaderIconButton onClick={onBackClick} edge="start">
+            <ArrowBackIcon />
+          </HeaderIconButton>
+        )}
+        <AvatarContainer>
+          <StyledAvatar
+            src={conversation?.friend?.avatar}
+            alt={conversation?.friend?.username}
           >
-            {formatUsername(username)}
-          </Box>
-          <Box>
-            <Typography variant="h6">{username}</Typography>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.5,
-                color: isOnline ? "#4caf50" : "#757575",
-              }}
+            {conversation?.friend?.username?.charAt(0).toUpperCase()}
+          </StyledAvatar>
+          <UserInfo>
+            <UserName variant="subtitle1">
+              {conversation?.friend?.username || "Chat"}
+            </UserName>
+            <UserStatus
+              variant="body2"
+              isOnline={onlineUsers[conversation?.friend?._id]}
             >
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: isOnline ? "#4caf50" : "#757575",
-                }}
-              />
-              <Typography variant="body2">
-                {isOnline ? "Online" : "Offline"}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-      </ChatHeader>
+              {onlineUsers[conversation?.friend?._id] ? (
+                <>
+                  <OnlineBadge />
+                  online
+                </>
+              ) : (
+                `last seen ${format(
+                  new Date(conversation?.friend?.lastSeen || new Date()),
+                  "h:mm a"
+                ).toLowerCase()}`
+              )}
+            </UserStatus>
+          </UserInfo>
+        </AvatarContainer>
+        <HeaderActions>
+          <HeaderIconButton size="small" title="Search in conversation">
+            <SearchIcon fontSize="small" />
+          </HeaderIconButton>
+          <HeaderIconButton size="small" title="More options">
+            <MoreVertIcon fontSize="small" />
+          </HeaderIconButton>
+        </HeaderActions>
+      </Header>
 
-      <ChatMessages onScroll={handleScroll}>
+      <MessagesContainer ref={messagesContainerRef}>
         {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-            <CircularProgress />
+          <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
+            <CircularProgress size={24} />
           </Box>
         ) : (
-          messages.map((message) => (
-            <MessageBubble
-              key={message._id}
-              message={message}
-              isOwn={message.sender._id === localStorage.getItem("userId")}
-            />
-          ))
+          messages.map((message, index) => {
+            const isOwn = String(message.sender) === String(user._id);
+            return (
+              <MemoizedMessageBubble
+                key={message._id || index}
+                message={{
+                  ...message,
+                  sender: message.sender,
+                }}
+                isOwn={isOwn}
+              />
+            );
+          })
         )}
-        <div ref={messagesEndRef} />
-      </ChatMessages>
+      </MessagesContainer>
 
-      <ChatInput component="form" onSubmit={handleSendMessage}>
-        <StyledTextField
-          fullWidth
-          placeholder="Type a message..."
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          variant="outlined"
-          size="small"
-        />
-        <IconButton
-          type="submit"
-          disabled={!newMessage.trim()}
-          sx={{
-            color: newMessage.trim() ? "#2B5278" : "rgba(255, 255, 255, 0.3)",
-            "&:hover": {
-              backgroundColor: "rgba(43, 82, 120, 0.1)",
-            },
-          }}
-        >
-          <SendIcon />
-        </IconButton>
-      </ChatInput>
-    </StyledChatMain>
+      <InputContainer>
+        <form onSubmit={handleSendMessage}>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Type a message"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              disabled={!isConnected}
+              multiline
+              maxRows={4}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "20px",
+                },
+              }}
+            />
+            <IconButton
+              type="submit"
+              color="primary"
+              disabled={!newMessage.trim() || !isConnected}
+            >
+              <SendIcon />
+            </IconButton>
+          </Box>
+        </form>
+      </InputContainer>
+    </ChatMainContainer>
   );
 };
 

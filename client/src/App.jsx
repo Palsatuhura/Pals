@@ -1,10 +1,5 @@
 import React, { useState, useEffect, createContext } from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter as Router } from "react-router-dom";
 import { Box } from "@mui/material";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -18,6 +13,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { WebSocketProvider } from "./context/WebSocketContext";
 import AppRoutes from "./AppRoutes";
+import { styled } from "@mui/material/styles";
 
 // Page imports
 import Login from "./pages/Login";
@@ -26,6 +22,30 @@ import Help from "./pages/Help";
 import Profile from "./pages/Profile";
 
 export const SocketContext = createContext();
+
+const AppContainer = styled(Box)(({ theme }) => ({
+  height: "100vh",
+  width: "100vw",
+  margin: 0,
+  padding: 0,
+  overflow: "hidden",
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  display: "flex",
+  flexDirection: "column",
+  backgroundColor: theme.palette.background.default,
+}));
+
+const MainContent = styled(Box)({
+  flex: 1,
+  overflow: "hidden",
+  position: "relative",
+  width: "100%",
+  height: "100%",
+});
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -90,31 +110,14 @@ function App() {
             <ThemeProvider theme={theme}>
               <SocketContext.Provider value={socket}>
                 <CssBaseline />
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    minHeight: "100vh",
-                    bgcolor: "background.default",
-                    color: "text.primary",
-                  }}
-                >
-                  <Box
-                    component="main"
-                    sx={{
-                      flexGrow: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                      position: "relative",
-                    }}
-                  >
+                <AppContainer>
+                  <MainContent>
                     <AppRoutes
                       isAuthenticated={isAuthenticated}
                       setIsAuthenticated={setIsAuthenticated}
                       showNotification={handleShowNotification}
                     />
-                  </Box>
-
+                  </MainContent>
                   <ToastContainer
                     position="top-right"
                     autoClose={3000}
@@ -127,7 +130,7 @@ function App() {
                     pauseOnHover
                     theme="dark"
                   />
-                </Box>
+                </AppContainer>
               </SocketContext.Provider>
             </ThemeProvider>
           </AuthProvider>

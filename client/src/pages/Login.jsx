@@ -24,12 +24,12 @@ import {
 } from "@mui/icons-material";
 import chatService from "../services/chatService";
 import { useAuth } from "../context/AuthContext";
-import { useNotification } from "../context/NotificationContext";
+import { showNotification } from "../utils/notificationUtils";
 import { useWebSocket } from "../context/WebSocketContext";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { showNotification } = useNotification();
+
   const { websocketService } = useWebSocket();
   const { setIsAuthenticated } = useAuth();
 
@@ -121,10 +121,7 @@ const Login = () => {
         // Handle signup
         if (!username) {
           setError("Please enter a username");
-          showNotification({
-            message: "Please enter a username",
-            severity: "error",
-          });
+          showNotification("Please enter a Username", "error");
           setLoading(false);
           return;
         }
@@ -135,10 +132,7 @@ const Login = () => {
         // Handle login with session ID
         if (!sessionId) {
           setError("Please enter your session ID");
-          showNotification({
-            message: "Please enter your session ID",
-            severity: "error",
-          });
+          showNotification("Please enter a Session ID", "error");
           setLoading(false);
           return;
         }
@@ -154,20 +148,18 @@ const Login = () => {
         error.response?.data?.message ||
         "An error occurred during authentication";
       setError(errorMessage);
-      showNotification({
-        message: errorMessage,
-        severity: "error",
-      });
+      showNotification(errorMessage, "error");
     } finally {
       setLoading(false);
     }
   };
 
   const handleLoginSuccess = (response) => {
-    // Store auth token
+    console.log("Login response:", response.data);
+
+    // Store auth data
     localStorage.setItem("token", response.data.token);
-    localStorage.setItem("userId", response.data.user._id);
-    localStorage.setItem("username", response.data.user.username);
+    localStorage.setItem("user", JSON.stringify(response.data.user));
 
     // If this is a new registration, show the session ID
     if (isSignup) {
@@ -181,10 +173,10 @@ const Login = () => {
 
       setIsAuthenticated(true);
       // Show success notification
-      showNotification({
-        message: `Welcome back, ${response.data.user.username}!`,
-        severity: "success",
-      });
+      showNotification(
+        `Welcome back, ${response.data.user.username}!`,
+        "success"
+      );
 
       // Navigate to chat
       navigate("/chat");
@@ -194,17 +186,11 @@ const Login = () => {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(newSessionId);
-      showNotification({
-        message: "Session ID copied to clipboard!",
-        severity: "success",
-      });
+      showNotification(`Session ID copied to clipboard!`, "success");
       setCopied(true);
       setShowConfirmDialog(true);
     } catch (error) {
-      showNotification({
-        message: "Failed to copy Session ID",
-        severity: "error",
-      });
+      showNotification("Failed to copy Session ID", "error");
     }
   };
 
@@ -219,10 +205,7 @@ const Login = () => {
     setShowConfirmDialog(false);
 
     // Show success notification
-    showNotification({
-      message: "Registration successful! Welcome to Pals",
-      severity: "success",
-    });
+    showNotification(`Registration successful! Welcome to Pals`, "success");
 
     // Navigate to chat
     navigate("/chat", { replace: true });
