@@ -15,6 +15,7 @@ const AppRoutes = () => {
         path="/"
         element={isAuthenticated ? <Navigate to="/chat" /> : <Login />}
       />
+      <Route path="*" element={<Navigate to={"/"} replace />} />
 
       <Route
         path="/chat"
