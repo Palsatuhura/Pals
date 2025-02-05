@@ -360,14 +360,11 @@ const ChatSidebar = ({
       const response = await chatService.createConversation(sessionId);
       setShowAddFriendDialog(false);
       setSessionId("");
-      toast.success("Friend request added successfully!");
+      console.log("Response at add friend: ", response);
+      toast.success("Friend added successfully!");
     } catch (error) {
-      setError(
-        error.response?.data?.message || "Failed to send friend request"
-      );
-      toast.error(
-        error.response?.data?.message || "Failed to send friend request"
-      );
+      setError(error.response?.data?.message || "Failed to add friend");
+      toast.error(error.response?.data?.message || "Failed to add friend");
     } finally {
       setLoading(false);
     }

@@ -193,6 +193,11 @@ class WebSocketService {
     this.statusHandlers.delete(handler);
   }
 
+  onConversationCreated(handler) {
+    this.socket.on("conversation_created", handler);
+    return () => this.socket.off("conversation_created", handler);
+  }
+
   // Typing status
   async sendTyping(conversationId, isTyping) {
     const socket = await this.ensureConnected();

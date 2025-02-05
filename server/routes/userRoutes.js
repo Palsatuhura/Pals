@@ -257,6 +257,13 @@ router.post("/conversation", authenticateToken, async (req, res) => {
       conversation._id
     ).populate("participants", "username sessionId status lastActive");
 
+    req.app
+      .get("io")
+      .to([req.user._id.toString(), friend._id.toString()])
+      .emit("conversation_created", {
+        conversation: populatedConversation.toObject({ virtuals: true }),
+      });
+
     res.json({
       message: "Conversation created successfully",
       conversation: {

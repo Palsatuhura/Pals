@@ -15,6 +15,7 @@ import chatService from "../services/chatService";
 import { showNotification } from "../utils/notificationUtils";
 import { io } from "socket.io-client";
 import { styled } from "@mui/material/styles";
+import websocketService from "../services/websocketService";
 
 const ChatContainer = styled(Box)(({ theme }) => ({
   display: "flex",
@@ -234,6 +235,19 @@ const Chat = () => {
     };
 
     loadConversations();
+
+    const handleNewConversation = ({ conversation }) => {
+      setConversations((prev) => {
+        const exists = prev.some((c) => c.id === conversation._id);
+        return exists ? prev : [...prev, cconversation];
+      });
+    };
+
+    const cleanup = websocketService.onConversationCreated(
+      handleNewConversation
+    );
+
+    return () => cleanup();
   }, [user]);
 
   // Handle socket events for user status updates
