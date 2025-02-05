@@ -78,7 +78,7 @@ const StyledAvatar = styled(Avatar)(({ theme }) => ({
   width: 40,
   height: 40,
   backgroundColor: theme.palette.primary.main,
-  fontSize: "16px",
+  fontSize: "23px",
   fontWeight: 500,
   cursor: "pointer",
   transition: "transform 0.2s ease",
@@ -332,7 +332,7 @@ const ChatSidebar = ({
   const [showNewConversationDialog, setShowNewConversationDialog] =
     useState(false);
   const [showAddFriendDialog, setShowAddFriendDialog] = useState(false);
-  const [friendUsername, setFriendUsername] = useState("");
+  const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const userId = localStorage.getItem("userId");
@@ -357,10 +357,10 @@ const ChatSidebar = ({
     try {
       setLoading(true);
       setError(null);
-      const response = await chatService.addFriend(friendUsername);
+      const response = await chatService.createConversation(sessionId);
       setShowAddFriendDialog(false);
-      setFriendUsername("");
-      toast.success("Friend request sent successfully!");
+      setSessionId("");
+      toast.success("Friend request added successfully!");
     } catch (error) {
       setError(
         error.response?.data?.message || "Failed to send friend request"
@@ -457,15 +457,15 @@ const ChatSidebar = ({
         <DialogTitle>Add New Friend</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Enter the username of the friend you want to add.
+            Enter the session Id of the friend you want to add.
           </DialogContentText>
           <TextField
             autoFocus
             margin="dense"
-            label="Friend's Username"
+            label="Session Id"
             fullWidth
-            value={friendUsername}
-            onChange={(e) => setFriendUsername(e.target.value)}
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
             error={!!error}
             helperText={error}
           />
@@ -474,7 +474,7 @@ const ChatSidebar = ({
           <Button onClick={() => setShowAddFriendDialog(false)}>Cancel</Button>
           <Button
             onClick={handleAddFriend}
-            disabled={!friendUsername.trim() || loading}
+            disabled={!sessionId.trim() || loading}
           >
             {loading ? <CircularProgress size={24} /> : "Add Friend"}
           </Button>

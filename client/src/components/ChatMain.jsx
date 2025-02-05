@@ -97,7 +97,7 @@ const UserName = styled(Typography)({
 const UserStatus = styled(Typography, {
   shouldForwardProp: (prop) => prop !== "$isOnline",
 })(({ theme, $isOnline }) => ({
-  fontSize: "13px",
+  fontSize: "16px",
   lineHeight: "18px",
   color: $isOnline ? theme.palette.success.main : theme.palette.text.secondary,
   display: "flex",
@@ -109,8 +109,8 @@ const StyledAvatar = styled(Avatar)(({ theme }) => ({
   width: 40,
   height: 40,
   backgroundColor: theme.palette.primary.main,
-  fontSize: "16px",
-  fontWeight: 500,
+  fontSize: "20px",
+  fontWeight: 600,
   cursor: "pointer",
   transition: "transform 0.2s ease",
   "&:hover": {
@@ -354,10 +354,7 @@ const ChatMain = ({
               $isOnline={onlineUsers?.[conversation?.friend?._id] || false}
             >
               {onlineUsers?.[conversation?.friend?._id] ? (
-                <>
-                  <OnlineBadge />
-                  online
-                </>
+                <>online</>
               ) : (
                 lastSeenDisplay
               )}

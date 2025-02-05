@@ -250,19 +250,6 @@ const chatService = {
     }
   },
 
-  // Add friend by session ID
-  addFriend: async (sessionId) => {
-    try {
-      const response = await api.post("/users/add-friend", { sessionId });
-      return response.data;
-    } catch (error) {
-      if (error.response?.status === 404) {
-        throw new Error("User not found with this session ID");
-      }
-      throw error;
-    }
-  },
-
   // Mark conversation as read
   markConversationAsRead: async (conversationId) => {
     try {
