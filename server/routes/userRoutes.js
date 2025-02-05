@@ -158,6 +158,8 @@ router.put("/status", authenticateToken, async (req, res) => {
       { new: true }
     );
 
+    console.log("User: ", user);
+
     req.app.get("io").emit("user_status_change", {
       userId: user._id,
       status: user.onlineStatus,
