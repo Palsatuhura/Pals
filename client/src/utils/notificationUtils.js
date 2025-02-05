@@ -1,33 +1,33 @@
-import { toast } from 'react-toastify';
+import { toast } from "react-toastify";
 
 const defaultOptions = {
   position: "top-right",
-  autoClose: 3000,
-  hideProgressBar: false,
+  autoClose: 25000,
+  hideProgressBar: true,
   closeOnClick: true,
   pauseOnHover: true,
   draggable: true,
   theme: "dark",
   style: {
-    background: '#333',
-    color: '#fff',
-    borderRadius: '8px',
-    padding: '16px',
-    fontSize: '14px'
-  }
+    background: "#333",
+    color: "#fff",
+    borderRadius: "8px",
+    padding: "16px",
+    fontSize: "14px",
+  },
 };
 
-export const showNotification = (message, type = 'info') => {
+export const showNotification = (message, type = "info") => {
   if (!message) return;
 
   switch (type.toLowerCase()) {
-    case 'success':
+    case "success":
       toast.success(message, defaultOptions);
       break;
-    case 'error':
+    case "error":
       toast.error(message, defaultOptions);
       break;
-    case 'warning':
+    case "warning":
       toast.warning(message, defaultOptions);
       break;
     default:

@@ -8,13 +8,13 @@ const { generateToken } = require("../middleware/auth");
 router.post("/login", async (req, res) => {
   try {
     const { sessionId, username } = req.body;
-    
+
     if (sessionId) {
       // Find user by sessionId
       let user = await User.findOne({ sessionId: sessionId.toUpperCase() });
-      
+
       if (!user) {
-        return res.status(404).json({ message: "User not found. Please check your session ID." });
+        return res.status(404).json({ message: "User not found" });
       }
 
       // Set user as online
@@ -23,44 +23,19 @@ router.post("/login", async (req, res) => {
       // Generate JWT token
       const token = generateToken(user);
 
-      res.json({ 
-        token, 
+      res.json({
+        token,
         user: {
           _id: user._id,
           username: user.username,
           sessionId: user.sessionId,
           isOnline: user.isOnline,
           lastSeen: user.lastSeen,
-          onlineStatus: user.onlineStatus
-        } 
-      });
-    } else if (username) {
-      // Find user by username
-      let user = await User.findOne({ username });
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found. Please check your username." });
-      }
-
-      // Set user as online
-      await user.setOnline();
-
-      // Generate JWT token
-      const token = generateToken(user);
-
-      res.json({ 
-        token, 
-        user: {
-          _id: user._id,
-          username: user.username,
-          sessionId: user.sessionId,
-          isOnline: user.isOnline,
-          lastSeen: user.lastSeen,
-          onlineStatus: user.onlineStatus
-        } 
+          onlineStatus: user.onlineStatus,
+        },
       });
     } else {
-      return res.status(400).json({ message: "Either session ID or username is required" });
+      return res.status(400).json({ message: "Session ID is required " });
     }
   } catch (error) {
     console.error("Login error:", error);
@@ -73,15 +48,21 @@ router.post("/register", async (req, res) => {
   try {
     const { username } = req.body;
 
-    if (!username || typeof username !== 'string') {
-      return res.status(400).json({ message: "Username is required and must be a string" });
+    if (!username || typeof username !== "string") {
+      return res.status(400).json({ message: "Username is required" });
     }
 
     // Generate a unique session ID
     const generateSessionId = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      const prefix = Array(2).fill().map(() => chars[Math.floor(Math.random() * 26)]).join('');
-      const middle = Array(4).fill().map(() => chars[Math.floor(Math.random() * chars.length)]).join('');
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      const prefix = Array(2)
+        .fill()
+        .map(() => chars[Math.floor(Math.random() * 26)])
+        .join("");
+      const middle = Array(4)
+        .fill()
+        .map(() => chars[Math.floor(Math.random() * chars.length)])
+        .join("");
       const year = new Date().getFullYear();
       const suffix = chars[Math.floor(Math.random() * 26)];
       return `${prefix}-${middle}-${year}${suffix}`;
@@ -101,7 +82,7 @@ router.post("/register", async (req, res) => {
     const user = await User.create({
       username,
       sessionId,
-      isOnline: true
+      isOnline: true,
     });
 
     // Generate JWT token
@@ -115,8 +96,8 @@ router.post("/register", async (req, res) => {
         sessionId: user.sessionId,
         isOnline: user.isOnline,
         lastSeen: user.lastSeen,
-        onlineStatus: user.onlineStatus
-      }
+        onlineStatus: user.onlineStatus,
+      },
     });
   } catch (error) {
     console.error("Registration error:", error);

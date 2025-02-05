@@ -140,15 +140,13 @@ const Login = () => {
         const response = await chatService.login({
           sessionId: sessionId.toUpperCase(),
         });
+
         handleLoginSuccess(response);
       }
     } catch (error) {
       console.error("Auth error:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        "An error occurred during authentication";
-      setError(errorMessage);
-      showNotification(errorMessage, "error");
+      setError(error.message);
+      showNotification(error.message, "error");
     } finally {
       setLoading(false);
     }
@@ -186,11 +184,11 @@ const Login = () => {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(newSessionId);
-      showNotification(`Session ID copied to clipboard!`, "success");
+      showNotification(`✅ Copied`, "success");
       setCopied(true);
       setShowConfirmDialog(true);
     } catch (error) {
-      showNotification("Failed to copy Session ID", "error");
+      showNotification("Failed to copy", "error");
     }
   };
 
