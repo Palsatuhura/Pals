@@ -22,7 +22,7 @@ import chatService from "../services/chatService";
 import { SocketContext } from "../App";
 import MessageBubble from "./MessageBubble";
 import { styled } from "@mui/material/styles";
-import { format } from "date-fns";
+import { format, formatDate } from "date-fns";
 import { formatUsername, generateAvatarColor } from "../utils/formatUsername";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -165,12 +165,6 @@ const ChatMain = ({
   const messagesContainerRef = useRef(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-
-  const friend = conversation?.friend;
-  //const lastSeen = friend.lastSeen ? new Date(friend.lastSeen) : null;
-  console.log("Friend: ", friend);
-
-  console.log("online users: ", onlineUsers);
 
   ChatMain.propTypes = {
     conversation: PropTypes.object,
@@ -316,6 +310,26 @@ const ChatMain = ({
     );
   }
 
+  const friend = conversation?.friend;
+  console.log("Friend: ", friend);
+  console.log("Online Users: ", onlineUsers);
+
+  const isOnline = onlineUsers[friend?._id] || false;
+  let lastSeenDisplay;
+
+  const lastActiveTime = new Date(friend?.lastActive);
+  const currentTime = new Date();
+  const timeDiff = currentTime - lastActiveTime;
+
+  if (isOnline) {
+    lastSeenDisplay = "online";
+  } else {
+    lastSeenDisplay =
+      timeDiff < 5 * 60 * 1000
+        ? "few minutes back"
+        : `last seen at ${format(lastActiveTime, "h:mm a").toLowerCase()}`;
+  }
+
   return (
     <ChatMainContainer>
       <Header>
@@ -337,7 +351,7 @@ const ChatMain = ({
             </UserName>
             <UserStatus
               variant="body2"
-              $isOnline={onlineUsers?.[conversation?.friend?._id]}
+              $isOnline={onlineUsers?.[conversation?.friend?._id] || false}
             >
               {onlineUsers?.[conversation?.friend?._id] ? (
                 <>
@@ -345,15 +359,7 @@ const ChatMain = ({
                   online
                 </>
               ) : (
-                `last seen ${
-                  conversation?.friend?.lastSeen &&
-                  isValid(new Date(conversation.friend.lastSeen))
-                    ? format(
-                        new Date(conversation.friend.lastSeen),
-                        "h:mm a"
-                      ).toLowerCase()
-                    : "recently"
-                }`
+                lastSeenDisplay
               )}
             </UserStatus>
           </UserInfo>

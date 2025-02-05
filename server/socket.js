@@ -39,6 +39,7 @@ const setupSocket = (io) => {
       .then((user) => {
         onlineUsers[socket.userId] = true;
         userSockets[socket.userId] = socket.id;
+        io.emit("online_users", onlineUsers);
         io.emit("user_status_change", {
           userId: socket.userId,
           status: "online",
@@ -83,12 +84,13 @@ const setupSocket = (io) => {
 
         io.emit("user_status_change", {
           userId: socket.userId,
-          status: "offlins",
+          status: "offline",
           lastActive: new Date(),
         });
 
         delete onlineUsers[socket.userId];
         delete userSockets[socket.userId];
+        io.emit("online_users", onlineUsers); // Emit the updated online users list
       }
     });
 

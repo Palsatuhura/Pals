@@ -22,7 +22,7 @@ class WebSocketService {
       return this.connectionPromise;
     }
 
-    his.statusInterval = setInterval(() => {
+    this.statusInterval = setInterval(() => {
       if (Date.now() - this.lastPing > 30000) {
         // 30 seconds
         this.updateUserStatus("away");
@@ -64,6 +64,32 @@ class WebSocketService {
         this.socket.on("disconnect", () => {
           console.log("WebSocket disconnected");
           this.connectionPromise = null;
+        });
+
+        // Handle incoming messages
+        this.socket.on("new_message", (data) => {
+          this.messageHandlers.forEach((handler) => handler(data));
+        });
+
+        // Handle typing status
+        this.socket.on("user_typing", (data) => {
+          this.typingHandlers.forEach((handler) => handler(data));
+        });
+
+        // Handle message read status
+        this.socket.on("message_read", (data) => {
+          this.messageReadHandlers.forEach((handler) => handler(data));
+        });
+
+        // Handle user status changes
+        this.socket.on("user_status_change", (data) => {
+          this.statusHandlers.forEach((handler) => handler(data));
+        });
+
+        // Handle online users
+        this.socket.on("online_users", (data) => {
+          console.log("Received online users:", data);
+          setOnlineUsers(data);
         });
 
         // Handle incoming messages
