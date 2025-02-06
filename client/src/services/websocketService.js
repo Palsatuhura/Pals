@@ -193,9 +193,10 @@ class WebSocketService {
     this.statusHandlers.delete(handler);
   }
 
-  onConversationCreated(handler) {
-    this.socket.on("conversation_created", handler);
-    return () => this.socket.off("conversation_created", handler);
+  async onConversationCreated(handler) {
+    const socket = await this.ensureConnected();
+    socket.on("conversation_created", handler);
+    return () => socket.off("conversation_created", handler);
   }
 
   // Typing status
@@ -209,7 +210,6 @@ class WebSocketService {
     const socket = await this.ensureConnected();
     socket.emit("mark_read", { conversationId, messageId });
   }
-
   // Event listeners
   onNewMessage(handler) {
     this.messageHandlers.add(handler);

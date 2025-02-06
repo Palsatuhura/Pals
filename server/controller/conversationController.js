@@ -7,7 +7,9 @@ const createConversation = async (req, res) => {
     const { sessionId } = req.body;
 
     if (!sessionId) {
-      return res.status(400).json({ message: "Friend's session ID is required" });
+      return res
+        .status(400)
+        .json({ message: "Friend's session ID is required" });
     }
 
     // Find friend by session ID
@@ -40,8 +42,14 @@ const createConversation = async (req, res) => {
     await conversation.save();
 
     // Populate the conversation with participant details
-    const populatedConversation = await Conversation.findById(conversation._id)
-      .populate("participants", "username sessionId status lastActive");
+    const populatedConversation = await Conversation.findById(
+      conversation._id
+    ).populate("participants", "username sessionId status lastActive");
+
+    req.app
+      .get("io")
+      .to([req.user._id, friend._id])
+      .emit("conversation_created", populatedConversation);
 
     res.json({
       message: "Conversation created successfully",
@@ -68,8 +76,8 @@ const getConversationDetails = async (req, res) => {
         path: "lastMessage",
         populate: {
           path: "sender",
-          select: "username"
-        }
+          select: "username",
+        },
       });
 
     if (!conversation) {
@@ -81,7 +89,7 @@ const getConversationDetails = async (req, res) => {
     const friend = conversation.participants.find(
       (p) => p._id.toString() !== userId.toString()
     );
-    
+
     if (friend) {
       conversationObj.friend = {
         _id: friend._id,
@@ -111,8 +119,8 @@ const getConversations = async (req, res) => {
         path: "lastMessage",
         populate: {
           path: "sender",
-          select: "username"
-        }
+          select: "username",
+        },
       })
       .sort({ updatedAt: -1 });
 
@@ -121,12 +129,12 @@ const getConversations = async (req, res) => {
     // Transform conversations to include friend info
     const conversationsWithDetails = conversations.map((conv) => {
       const convObj = conv.toObject();
-      
+
       // Add friend details
       const friend = conv.participants.find(
         (p) => p._id.toString() !== req.user._id.toString()
       );
-      
+
       if (friend) {
         convObj.friend = {
           _id: friend._id,
