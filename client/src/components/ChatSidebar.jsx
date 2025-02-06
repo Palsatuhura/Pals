@@ -212,7 +212,7 @@ const getFriend = (conversation, userId) => {
     });
   }
 
-  return conversation.participants?.find((p) => p._id !== userId);
+  return friend;
 };
 
 const ConversationItem = ({
@@ -358,7 +358,6 @@ const ChatSidebar = ({
       setLoading(true);
       setError(null);
       const response = await chatService.createConversation(sessionId);
-      setConversations((prev) => [...prev, response.data]);
       setShowAddFriendDialog(false);
       setSessionId("");
       console.log("Response at add friend: ", response);

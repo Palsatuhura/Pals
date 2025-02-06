@@ -234,40 +234,24 @@ const Chat = () => {
       }
     };
 
-    const setupWebSocket = async () => {
-      await websocketService.ensureConnected();
-      const cleanup = websocketService.onConversationCreated(
-        handleNewConversation
-      );
-      return cleanup;
-    };
-
     loadConversations();
 
-    setupWebSocket().then((cleanup) => {
-      return () => {
-        if (cleanup) cleanup();
-      };
-    });
-  }, [user]);
-
-  // In Chat.js, update the conversation created handler:
-  useEffect(() => {
-    const handleNewConversation = (newConversation) => {
-      setConversationsList((prev) => {
-        const exists = prev.some((c) => c._id === newConversation._id);
-        return exists ? prev : [...prev, newConversation];
+    const handleNewConversation = ({ conversation }) => {
+      setConversations((prev) => {
+        const exists = prev.some((c) => c.id === conversation._id);
+        return exists ? prev : [...prev, conversation];
       });
     };
 
     const cleanup = websocketService.onConversationCreated(
       handleNewConversation
     );
-
     return () => {
-      if (cleanup) cleanup();
+      if (typeof cleanup === "function") {
+        cleanup(); // Call the cleanup function if it's defined
+      }
     };
-  }, []);
+  }, [user]);
 
   // Handle socket events for user status updates
   useEffect(() => {

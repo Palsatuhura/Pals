@@ -193,10 +193,12 @@ class WebSocketService {
     this.statusHandlers.delete(handler);
   }
 
-  async onConversationCreated(handler) {
-    const socket = await this.ensureConnected();
-    socket.on("conversation_created", handler);
-    return () => socket.off("conversation_created", handler);
+  onConversationCreated(handler) {
+    return new Promise(async (resolve) => {
+      const socket = await this.ensureConnected();
+      socket.on("conversation_created", handler);
+      resolve(() => socket.off("conversation_created", handler));
+    });
   }
 
   // Typing status
@@ -210,6 +212,7 @@ class WebSocketService {
     const socket = await this.ensureConnected();
     socket.emit("mark_read", { conversationId, messageId });
   }
+
   // Event listeners
   onNewMessage(handler) {
     this.messageHandlers.add(handler);
