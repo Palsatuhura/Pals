@@ -193,12 +193,15 @@ class WebSocketService {
     this.statusHandlers.delete(handler);
   }
 
-  onConversationCreated(handler) {
-    return new Promise(async (resolve) => {
-      const socket = await this.ensureConnected();
-      socket.on("conversation_created", handler);
-      resolve(() => socket.off("conversation_created", handler));
-    });
+  async onConversationCreated(handler) {
+    const socket = await this.ensureConnected();
+    if (!socket) {
+      console.error("Socket is not connected");
+
+      return () => {};
+    }
+    socket.on("conversation_created", handler);
+    return () => socket.off("conversation_created", handler);
   }
 
   // Typing status

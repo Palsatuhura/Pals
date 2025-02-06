@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      "@": resolve(__dirname, "src"),
     },
   },
   server: {
@@ -15,12 +15,12 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://localhost:5000",
+        target: "https://pals-o248.onrender.com",
         changeOrigin: true,
         secure: false,
       },
       "/socket.io": {
-        target: "http://localhost:5000",
+        target: "https://pals-o248.onrender.com",
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -30,11 +30,11 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
+        main: resolve(__dirname, "index.html"),
       },
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+          vendor: ["react", "react-dom", "react-router-dom"],
         },
       },
     },

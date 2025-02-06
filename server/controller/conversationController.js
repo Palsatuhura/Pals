@@ -46,10 +46,7 @@ const createConversation = async (req, res) => {
       conversation._id
     ).populate("participants", "username sessionId status lastActive");
 
-    req.app
-      .get("io")
-      .to([req.user._id, friend._id])
-      .emit("conversation_created", populatedConversation);
+    // req.app.get("io").to([req.user._id, friend._id]).emit("conversation_created", populatedConversation);
 
     res.json({
       message: "Conversation created successfully",

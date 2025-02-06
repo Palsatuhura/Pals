@@ -358,6 +358,8 @@ const ChatSidebar = ({
       setLoading(true);
       setError(null);
       const response = await chatService.createConversation(sessionId);
+      setConversations((prev) => [...prev, response.conversation]);
+
       setShowAddFriendDialog(false);
       setSessionId("");
       console.log("Response at add friend: ", response);

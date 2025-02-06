@@ -235,22 +235,6 @@ const Chat = () => {
     };
 
     loadConversations();
-
-    const handleNewConversation = ({ conversation }) => {
-      setConversations((prev) => {
-        const exists = prev.some((c) => c.id === conversation._id);
-        return exists ? prev : [...prev, conversation];
-      });
-    };
-
-    const cleanup = websocketService.onConversationCreated(
-      handleNewConversation
-    );
-    return () => {
-      if (typeof cleanup === "function") {
-        cleanup(); // Call the cleanup function if it's defined
-      }
-    };
   }, [user]);
 
   // Handle socket events for user status updates
